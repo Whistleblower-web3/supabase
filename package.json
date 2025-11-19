@@ -1,0 +1,30 @@
+{
+  "name": "supabase",
+  "version": "1.0.0",
+  "description": "本文档说明如何设置和使用 WikiTruth 项目的 Supabase 数据库。",
+  "main": "index.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "test:migrations": "vitest run tests/migrations.test.ts",
+    "test:network": "vitest run tests/network-isolation.test.ts",
+    "test:search": "vitest run tests/search-functions.test.ts",
+    "test:crud": "vitest run tests/crud-operations.test.ts",
+    "test:types": "vitest run tests/type-definitions.test.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.81.1",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.25",
+    "vitest": "^1.0.0",
+    "@vitest/coverage-v8": "^1.0.0"
+  }
+}

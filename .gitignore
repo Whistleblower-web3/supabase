@@ -1,0 +1,27 @@
+# 环境变量文件
+.env
+.env.test
+.env.local
+
+# 依赖
+node_modules/
+
+# 构建输出
+dist/
+*.log
+
+# 测试覆盖率
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+docs/
+tests/
