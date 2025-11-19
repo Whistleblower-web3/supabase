@@ -27,8 +27,8 @@ CREATE OR REPLACE FUNCTION search_boxes(
   offset_count INTEGER DEFAULT 0
 )
 RETURNS TABLE (
-  id BIGINT,
-  token_id BIGINT,
+  id NUMERIC(78, 0),
+  token_id NUMERIC(78, 0),
   title TEXT,
   description TEXT,
   type_of_crime TEXT,

@@ -90,10 +90,10 @@ EXECUTE FUNCTION update_user_withdraws_on_withdraw();
 CREATE OR REPLACE FUNCTION update_user_rewards_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_minter_id TEXT;
-    v_seller_id TEXT;
-    v_completer_id TEXT;
-    v_user_id TEXT;
+    v_minter_id NUMERIC(78, 0);
+    v_seller_id NUMERIC(78, 0);
+    v_completer_id NUMERIC(78, 0);
+    v_user_id NUMERIC(78, 0);
     v_user_reward_id TEXT;
     v_amount_change NUMERIC(78, 0);
 BEGIN
@@ -126,19 +126,19 @@ BEGIN
     END;
 
     -- 如果用户 ID 为空，跳过
-    IF v_user_id IS NULL OR v_user_id = '' THEN
+    IF v_user_id IS NULL THEN
         RETURN NEW;
     END IF;
 
     -- 更新用户奖励（Minter/Seller/Completer）
     -- 注意：user_rewards 中不包含 Total 类型，只记录分配给具体角色的奖励
-    v_user_reward_id := v_user_id::BIGINT::TEXT || '-' || NEW.reward_type || '-' || NEW.token;
+    v_user_reward_id := v_user_id::TEXT || '-' || NEW.reward_type || '-' || NEW.token;
     INSERT INTO user_rewards (
         network, layer, id, user_id, reward_type, token, amount
     )
     VALUES (
-        NEW.network, NEW.layer, v_user_reward_id, v_user_id::BIGINT, NEW.reward_type, NEW.token, 
-        GREATEST(0, COALESCE((SELECT amount FROM user_rewards WHERE network = NEW.network AND layer = NEW.layer AND user_id = v_user_id::BIGINT AND reward_type = NEW.reward_type AND token = NEW.token), 0) + v_amount_change)
+        NEW.network, NEW.layer, v_user_reward_id, v_user_id, NEW.reward_type, NEW.token, 
+        GREATEST(0, COALESCE((SELECT amount FROM user_rewards WHERE network = NEW.network AND layer = NEW.layer AND user_id = v_user_id AND reward_type = NEW.reward_type AND token = NEW.token), 0) + v_amount_change)
     )
     ON CONFLICT (network, layer, user_id, reward_type, token)
     DO UPDATE SET
@@ -196,15 +196,15 @@ EXECUTE FUNCTION update_box_user_order_amounts_on_payment();
 CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_withdraw()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_box_id BIGINT;
-    v_user_id BIGINT;
+    v_box_id NUMERIC(78, 0);
+    v_user_id NUMERIC(78, 0);
 BEGIN
     -- 只处理 Order 和 Refund 类型的提取
     IF NEW.withdraw_type NOT IN ('Order', 'Refund') THEN
         RETURN NEW;
     END IF;
 
-    -- user_id 在 withdraws 表中是 BIGINT，直接使用
+    -- user_id 在 withdraws 表中是 NUMERIC(78, 0)，直接使用
     v_user_id := NEW.user_id;
 
     -- 如果 box_list 为空，跳过
@@ -242,7 +242,7 @@ EXECUTE FUNCTION update_box_user_order_amounts_on_withdraw();
 CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_buyer_id TEXT;
+    v_buyer_id NUMERIC(78, 0);
 BEGIN
     -- 只处理 Seller、Completer 类型的奖励（Total 类型不处理）
     IF NEW.reward_type NOT IN ('Seller', 'Completer') THEN
@@ -263,17 +263,16 @@ BEGIN
         AND id = NEW.box_id;
 
     -- 如果 buyer_id 为空，跳过
-    IF v_buyer_id IS NULL OR v_buyer_id = '' THEN
+    IF v_buyer_id IS NULL THEN
         RETURN NEW;
     END IF;
 
     -- 清零 buyer 在该 box 该 token 的 order 资金
-    -- buyer_id 在 boxes 表中是 TEXT，需要转换为 BIGINT 以匹配 box_user_order_amounts.user_id
     UPDATE box_user_order_amounts
     SET amount = 0
     WHERE network = NEW.network
         AND layer = NEW.layer
-        AND user_id = v_buyer_id::BIGINT
+        AND user_id = v_buyer_id
         AND box_id = NEW.box_id
         AND token = NEW.token;
 

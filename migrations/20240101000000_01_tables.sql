@@ -20,10 +20,10 @@ CREATE TABLE IF NOT EXISTS boxes (
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
   -- 基础标识
-  id BIGINT NOT NULL, -- boxId 
+  id NUMERIC(78, 0) NOT NULL, -- boxId 
   
   PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
-  token_id BIGINT NOT NULL, -- NFT tokenId，与 boxId 相同
+  token_id NUMERIC(78, 0) NOT NULL, -- NFT tokenId，与 boxId 相同
   token_uri TEXT, -- NFT tokenURI（当前不会写入该字段，预留扩展）
   
   -- 链上数据字段
@@ -33,12 +33,12 @@ CREATE TABLE IF NOT EXISTS boxes (
   deadline NUMERIC(78, 0) NOT NULL DEFAULT 0, 
   
   -- 用户关系
-  minter_id TEXT NOT NULL, 
-  owner_address TEXT NOT NULL, 
-  publisher_id TEXT, 
-  seller_id TEXT, 
-  buyer_id TEXT, 
-  completer_id TEXT, 
+  minter_id NUMERIC(78, 0) NOT NULL, -- UserId
+  owner_address TEXT NOT NULL, -- NFT owner address (钱包地址)
+  publisher_id NUMERIC(78, 0), -- UserId
+  seller_id NUMERIC(78, 0), -- UserId
+  buyer_id NUMERIC(78, 0), -- UserId
+  completer_id NUMERIC(78, 0), -- UserId 
   
   -- 状态和时间戳
   status TEXT NOT NULL CHECK (status IN (
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS users (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id BIGINT NOT NULL, -- UserId 
+  id NUMERIC(78, 0) NOT NULL, -- UserId 
   
   PRIMARY KEY (network, layer, id) -- 复合主键包含网络字段
 );
@@ -86,8 +86,8 @@ CREATE TABLE IF NOT EXISTS box_bidders (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id BIGINT NOT NULL, -- boxId
-  bidder_id BIGINT NOT NULL, -- UserId
+  id NUMERIC(78, 0) NOT NULL, -- boxId
+  bidder_id NUMERIC(78, 0) NOT NULL, -- UserId
   
   PRIMARY KEY (network, layer, id, bidder_id), -- 复合主键包含网络字段
   FOREIGN KEY (network, layer, id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS metadata_boxes (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id BIGINT NOT NULL, -- boxId
+  id NUMERIC(78, 0) NOT NULL, -- boxId
   
   PRIMARY KEY (network, layer, id), 
   FOREIGN KEY (network, layer, id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
@@ -162,8 +162,8 @@ CREATE TABLE IF NOT EXISTS payments (
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
   id TEXT NOT NULL, -- Transaction hash - log index
-  box_id BIGINT NOT NULL,
-  user_id BIGINT NOT NULL, -- UserId
+  box_id NUMERIC(78, 0) NOT NULL,
+  user_id NUMERIC(78, 0) NOT NULL, -- UserId
   
   PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
@@ -172,10 +172,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount NUMERIC(78, 0) NOT NULL, 
   timestamp NUMERIC(78, 0) NOT NULL,
   transaction_hash BYTEA NOT NULL, 
-  block_number NUMERIC(78, 0) NOT NULL, 
-  
-  -- 唯一约束（包含网络字段）
-  UNIQUE(network, layer, transaction_hash, block_number)
+  block_number NUMERIC(78, 0) NOT NULL
 );
 
 -- ============================================
@@ -190,8 +187,8 @@ CREATE TABLE IF NOT EXISTS withdraws (
   
   id TEXT NOT NULL, -- Transaction hash - log index
   token TEXT NOT NULL, 
-  box_list BIGINT[] NOT NULL, -- Box ID 列表
-  user_id BIGINT NOT NULL, -- UserId
+  box_list NUMERIC(78, 0)[] NOT NULL, -- Box ID 列表
+  user_id NUMERIC(78, 0) NOT NULL, -- UserId
   
   PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
@@ -199,10 +196,7 @@ CREATE TABLE IF NOT EXISTS withdraws (
   amount NUMERIC(78, 0) NOT NULL,
   timestamp NUMERIC(78, 0) NOT NULL,
   transaction_hash BYTEA NOT NULL,
-  block_number NUMERIC(78, 0) NOT NULL,
-  
-  -- 唯一约束（包含网络字段）
-  UNIQUE(network, layer, transaction_hash, block_number)
+  block_number NUMERIC(78, 0) NOT NULL
 );
 
 -- ============================================
@@ -218,7 +212,7 @@ CREATE TABLE IF NOT EXISTS rewards_addeds (
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
   id TEXT NOT NULL, -- Transaction hash - log index（用于唯一标识每次事件）
-  box_id BIGINT NOT NULL, 
+  box_id NUMERIC(78, 0) NOT NULL, 
   token TEXT NOT NULL, -- Token address
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer', 'Total')), -- 注意：包含 'Total'
   amount NUMERIC(78, 0) NOT NULL,
@@ -227,10 +221,7 @@ CREATE TABLE IF NOT EXISTS rewards_addeds (
   block_number NUMERIC(78, 0) NOT NULL,
   
   PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
-  FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
-  
-  -- 唯一约束（包含网络字段，防止重复插入同一事件）
-  UNIQUE(network, layer, transaction_hash, block_number)
+  FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE
 );
 
 -- ============================================
@@ -244,7 +235,7 @@ CREATE TABLE IF NOT EXISTS box_rewards (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   id TEXT NOT NULL, -- box_id-reward_type-token 复合键
-  box_id BIGINT NOT NULL,
+  box_id NUMERIC(78, 0) NOT NULL,
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer', 'Total')), 
   token TEXT NOT NULL, 
   PRIMARY KEY (network, layer, id),
@@ -264,7 +255,7 @@ CREATE TABLE IF NOT EXISTS user_rewards (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   id TEXT NOT NULL, -- user_id-reward_type-token 复合键
-  user_id BIGINT NOT NULL, 
+  user_id NUMERIC(78, 0) NOT NULL, 
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer')), 
   token TEXT NOT NULL, 
   PRIMARY KEY (network, layer, id),
@@ -283,7 +274,7 @@ CREATE TABLE IF NOT EXISTS user_withdraws (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   id TEXT NOT NULL, -- user_id-withdraw_type-token 复合键
-  user_id BIGINT NOT NULL, 
+  user_id NUMERIC(78, 0) NOT NULL, 
   withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Helper', 'Minter')), -- 提取类型
   token TEXT NOT NULL, 
   PRIMARY KEY (network, layer, id),
@@ -306,8 +297,8 @@ CREATE TABLE IF NOT EXISTS box_user_order_amounts (
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
   id TEXT NOT NULL, -- user_id-box_id-token 复合键
-  user_id BIGINT NOT NULL, -- UserId
-  box_id BIGINT NOT NULL, -- box_id
+  user_id NUMERIC(78, 0) NOT NULL, -- UserId
+  box_id NUMERIC(78, 0) NOT NULL, -- box_id
   token TEXT NOT NULL, 
   
   PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段

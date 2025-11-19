@@ -77,8 +77,8 @@ export interface Database {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
-                    id: number;
-                    token_id: number;
+                    id: string;
+                    token_id: string;
                     token_uri: string | null;
                     box_info_cid: string | null;
                     private_key: string | null;
@@ -106,8 +106,8 @@ export interface Database {
                 Insert: {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id: number;
-                    token_id: number;
+                    id: string;
+                    token_id: string;
                     token_uri?: string | null;
                     box_info_cid: string | null;
                     private_key?: string | null;
@@ -143,8 +143,8 @@ export interface Database {
                 Update: {
                     network?: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id?: number;
-                    token_id?: number;
+                    id?: string;
+                    token_id?: string;
                     token_uri?: string | null;
                     box_info_cid?: string | null;
                     private_key?: string | null;
@@ -174,7 +174,7 @@ export interface Database {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
-                    id: number;
+                    id: string;
                     type_of_crime: string | null;
                     label: string[] | null;
                     title: string | null;
@@ -197,7 +197,7 @@ export interface Database {
                 Insert: {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id: number; // boxId (BIGINT)
+                    id: string; // boxId (BIGINT)
                     type_of_crime: string | null;
                     label: string[] | null;
                     title: string | null;
@@ -223,12 +223,12 @@ export interface Database {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
-                    id: number;
+                    id: string;
                 };
                 Insert: {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id: number;
+                    id: string;
                 }; 
                 Update: never; // 禁止后续更新
             };
@@ -253,13 +253,28 @@ export interface Database {
                     is_blacklisted?: boolean;
                 };
             };
+            box_bidders: {
+                Row: {
+                    network: 'testnet' | 'mainnet';
+                    layer: 'sapphire';
+                    id: string; // boxId（主键的一部分，对应 boxes.id）
+                    bidder_id: string;
+                };
+                Insert: {
+                    network: 'testnet' | 'mainnet';
+                    layer?: 'sapphire';
+                    id: string; // boxId
+                    bidder_id: string;
+                };
+                Update: never; // 禁止后续更新
+            };
             payments: {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
-                    box_id: number;
-                    user_id: number;
+                    box_id: string;
+                    user_id: string;
                     token: string;
                     amount: string;
                     timestamp: string;
@@ -270,8 +285,8 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
                     id: string;
-                    box_id: number;
-                    user_id: number;
+                    box_id: string;
+                    user_id: string;
                     token: string;
                     amount: string;
                     timestamp: string;
@@ -286,8 +301,8 @@ export interface Database {
                     layer: 'sapphire';
                     id: string;
                     token: string;
-                    box_list: number[];
-                    user_id: number;
+                    box_list: string[];
+                    user_id: string;
                     amount: string;
                     timestamp: string;
                     withdraw_type: 'Order' | 'Refund' | 'Helper' | 'Minter';
@@ -299,8 +314,8 @@ export interface Database {
                     layer?: 'sapphire';
                     id: string;
                     token: string;
-                    box_list: number[];
-                    user_id: number;
+                    box_list: string[];
+                    user_id: string;
                     amount: string;
                     timestamp: string;
                     withdraw_type: 'Order' | 'Helper' | 'Minter' | 'Refund';
@@ -314,7 +329,7 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
-                    box_id: number;
+                    box_id: string;
                     token: string;
                     amount: string;
                     reward_type: 'Minter' | 'Seller' | 'Completer' | 'Total';
@@ -326,7 +341,7 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
                     id: string;
-                    box_id: number;
+                    box_id: string;
                     token: string;
                     amount: string;
                     reward_type: 'Minter' | 'Seller' | 'Completer' | 'Total';
@@ -341,7 +356,7 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
-                    box_id: number;
+                    box_id: string;
                     reward_type: 'Minter' | 'Seller' | 'Completer' | 'Total';
                     token: string;
                     amount: string;
@@ -356,7 +371,7 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
-                    user_id: number;
+                    user_id: string;
                     reward_type: 'Minter' | 'Seller' | 'Completer';
                     token: string;
                     amount: string;
@@ -371,7 +386,7 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
-                    user_id: number;
+                    user_id: string;
                     withdraw_type: 'Helper' | 'Minter';
                     token: string;
                     amount: string;
@@ -380,28 +395,14 @@ export interface Database {
                 Insert: never;
                 Update: never;
             };
-            box_bidders: {
-                Row: {
-                    network: 'testnet' | 'mainnet';
-                    layer: 'sapphire';
-                    id: number; // boxId（主键的一部分，对应 boxes.id）
-                    bidder_id: number;
-                };
-                Insert: {
-                    network: 'testnet' | 'mainnet';
-                    layer?: 'sapphire';
-                    id: number; // boxId
-                    bidder_id: number;
-                };
-                Update: never; // 禁止后续更新
-            };
+            
             box_user_order_amounts: {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
-                    user_id: number;
-                    box_id: number;
+                    user_id: string;
+                    box_id: string;
                     token: string;
                     amount: string;
                 };
@@ -476,14 +477,14 @@ export interface Database {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
-                    id: number;
+                    id: string;
                     last_synced_block: string;
                     last_synced_at: string;
                 };
                 Insert: {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id?: number;
+                    id?: string;
                     last_synced_block?: string;
                     last_synced_at?: string;
                 };
@@ -491,7 +492,7 @@ export interface Database {
                 Update: {
                     network?: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id?: number;
+                    id?: string;
                     last_synced_block?: string;
                     last_synced_at?: string;
                 };
@@ -517,8 +518,8 @@ export interface Database {
                     offset_count?: number;
                 };
                 Returns: {
-                    id: number;
-                    token_id: number;
+                    id: string;
+                    token_id: string;
                     title: string | null;
                     description: string | null;
                     type_of_crime: string | null;
