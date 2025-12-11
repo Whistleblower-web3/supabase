@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS boxes (
   
   -- 时间戳字段
   create_timestamp NUMERIC(78, 0) NOT NULL, 
-  sell_timestamp NUMERIC(78, 0), 
   publish_timestamp NUMERIC(78, 0), 
   listed_timestamp NUMERIC(78, 0), 
   purchase_timestamp NUMERIC(78, 0), 
@@ -339,6 +338,7 @@ CREATE TABLE IF NOT EXISTS statistical_state (
 -- 14. fund_manager_state 表（资金管理器状态表 - 单例）
 -- ============================================
 -- 注意：需要在 token_total_amounts 之前创建，因为外键依赖
+-- 实际上它没有实际作用，但是可以保留，用于未来扩展
 CREATE TABLE IF NOT EXISTS fund_manager_state (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),

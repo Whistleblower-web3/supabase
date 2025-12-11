@@ -1,7 +1,6 @@
--- WikiTruth Supabase 数据库迁移文件
--- 03_functions.sql - 创建全文搜索函数
--- 注意：函数创建在表和索引之后
--- 所有函数都支持网络过滤，用于区分不同网络的数据
+-- 迁移：删除所有旧版本的 search_boxes 函数重载
+-- 使用 CASCADE 删除所有重载版本，避免函数不唯一错误
+DROP FUNCTION IF EXISTS search_boxes CASCADE;
 
 -- ============================================
 -- 全文搜索函数：search_boxes
@@ -17,6 +16,7 @@ CREATE OR REPLACE FUNCTION search_boxes(
   type_of_crime_filter TEXT[] DEFAULT NULL,
   country_filter TEXT[] DEFAULT NULL,
   label_filter TEXT[] DEFAULT NULL,
+  accepted_token_filter TEXT[] DEFAULT NULL,  -- 按接受的代币过滤（支持多个代币）
   min_price NUMERIC DEFAULT NULL,
   max_price NUMERIC DEFAULT NULL,
   min_timestamp NUMERIC DEFAULT NULL,
@@ -28,7 +28,6 @@ CREATE OR REPLACE FUNCTION search_boxes(
 )
 RETURNS TABLE (
   id NUMERIC(78, 0),
-  token_id NUMERIC(78, 0),
   title TEXT,
   description TEXT,
   type_of_crime TEXT,
@@ -39,7 +38,9 @@ RETURNS TABLE (
   price NUMERIC,
   nft_image TEXT,
   box_image TEXT,
+  event_date DATE,
   create_timestamp NUMERIC,
+  accepted_token TEXT,
   relevance REAL
 ) AS $$
 BEGIN
@@ -65,7 +66,6 @@ BEGIN
   RETURN QUERY
   SELECT 
     b.id,
-    b.token_id,
     mb.title,
     mb.description,
     mb.type_of_crime,
@@ -76,15 +76,15 @@ BEGIN
     b.price,
     mb.nft_image,
     mb.box_image,
+    mb.event_date,
     b.create_timestamp,
+    b.accepted_token,
     CASE 
       WHEN search_query IS NOT NULL THEN
         -- 加权相关性评分
         (
           -- 精确匹配 boxId（最高优先级）
           CASE WHEN b.id::TEXT = search_query THEN 10.0 ELSE 0 END +
-          -- 精确匹配 tokenId
-          CASE WHEN b.token_id::TEXT = search_query THEN 9.0 ELSE 0 END +
           -- 全文搜索相关性（title 和 description）
           ts_rank(
             to_tsvector('english', COALESCE(mb.title, '') || ' ' || COALESCE(mb.description, '')),
@@ -115,31 +115,33 @@ BEGIN
     AND (
       -- 如果没有搜索查询，返回所有结果
       search_query IS NULL OR
-      -- 全文搜索：title 和 description
+      search_query = '' OR
+      -- 精确匹配：boxId（支持文本和数字，最高优先级）
+      b.id::TEXT = search_query OR
+      -- 全文搜索：title 和 description（需要非空且能成功解析查询）
+      (mb.title IS NOT NULL OR mb.description IS NOT NULL) AND
       to_tsvector('english', COALESCE(mb.title, '') || ' ' || COALESCE(mb.description, '')) 
       @@ plainto_tsquery('english', search_query) OR
-      -- 精确匹配：boxId（支持文本和数字）
-      b.id::TEXT = search_query OR
-      b.token_id::TEXT = search_query OR
       -- 模糊匹配：title
-      mb.title ILIKE '%' || search_query || '%' OR
+      (mb.title IS NOT NULL AND mb.title ILIKE '%' || search_query || '%') OR
       -- 模糊匹配：description
-      mb.description ILIKE '%' || search_query || '%' OR
+      (mb.description IS NOT NULL AND mb.description ILIKE '%' || search_query || '%') OR
       -- 模糊匹配：type_of_crime
-      mb.type_of_crime ILIKE '%' || search_query || '%' OR
+      (mb.type_of_crime IS NOT NULL AND mb.type_of_crime ILIKE '%' || search_query || '%') OR
       -- 模糊匹配：country
-      mb.country ILIKE '%' || search_query || '%' OR
+      (mb.country IS NOT NULL AND mb.country ILIKE '%' || search_query || '%') OR
       -- 模糊匹配：state
-      mb.state ILIKE '%' || search_query || '%' OR
+      (mb.state IS NOT NULL AND mb.state ILIKE '%' || search_query || '%') OR
       -- 标签匹配
       (mb.label IS NOT NULL AND search_query = ANY(mb.label)) OR
       -- status 匹配
-      b.status ILIKE '%' || search_query || '%'
+      (b.status IS NOT NULL AND b.status ILIKE '%' || search_query || '%')
     )
     AND (status_filter IS NULL OR b.status = ANY(status_filter))
-    AND (type_of_crime_filter IS NULL OR mb.type_of_crime = ANY(type_of_crime_filter))
-    AND (country_filter IS NULL OR mb.country = ANY(country_filter))
-    AND (label_filter IS NULL OR mb.label && label_filter) -- 数组交集
+    AND (type_of_crime_filter IS NULL OR (mb.type_of_crime IS NOT NULL AND mb.type_of_crime = ANY(type_of_crime_filter)))
+    AND (country_filter IS NULL OR (mb.country IS NOT NULL AND mb.country = ANY(country_filter)))
+    AND (label_filter IS NULL OR (mb.label IS NOT NULL AND mb.label && label_filter)) -- 数组交集
+    AND (accepted_token_filter IS NULL OR b.accepted_token = ANY(accepted_token_filter)) -- 按接受的代币过滤
     AND (min_price IS NULL OR b.price >= min_price)
     AND (max_price IS NULL OR b.price <= max_price)
     AND (min_timestamp IS NULL OR b.create_timestamp >= min_timestamp)

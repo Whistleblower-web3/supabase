@@ -95,7 +95,6 @@ export interface Database {
                     accepted_token: string | null;
                     refund_permit: boolean | null;
                     create_timestamp: string;
-                    sell_timestamp: string | null;
                     publish_timestamp: string | null;
                     listed_timestamp: string | null;
                     purchase_timestamp: string | null;
@@ -124,7 +123,6 @@ export interface Database {
                     accepted_token?: string | null;
                     refund_permit?: boolean | null;
                     create_timestamp: string;
-                    sell_timestamp?: string | null;
                     publish_timestamp?: string | null;
                     listed_timestamp?: string | null;
                     purchase_timestamp?: string | null;
@@ -161,7 +159,6 @@ export interface Database {
                     accepted_token?: string | null;
                     refund_permit?: boolean | null;
                     create_timestamp?: string;
-                    sell_timestamp?: string | null;
                     publish_timestamp?: string | null;
                     listed_timestamp?: string | null;
                     purchase_timestamp?: string | null;
@@ -507,6 +504,7 @@ export interface Database {
                     status_filter?: string[] | null;
                     type_of_crime_filter?: string[] | null;
                     country_filter?: string[] | null;
+                    accepted_token_filter?: string[] | null;
                     label_filter?: string[] | null;
                     min_price?: number | null;
                     max_price?: number | null;
@@ -530,7 +528,9 @@ export interface Database {
                     price: string;
                     nft_image: string | null;
                     box_image: string | null;
+                    event_date: string | null;
                     create_timestamp: string;
+                    accepted_token: string | null;
                     relevance: number;
                 }[];
             };
