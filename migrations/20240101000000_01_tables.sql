@@ -1,57 +1,49 @@
--- WikiTruth Supabase 数据库迁移文件
--- 01_tables.sql - 创建所有表结构
--- 执行顺序：按照外键依赖关系创建表
--- 
--- 网络划分说明：
--- - network: 'testnet' | 'mainnet' (Oasis 网络类型)
--- - layer: 'sapphire' (Oasis 运行时层)
--- 所有表都包含网络字段，用于区分不同网络的数据
 
 -- ============================================
--- 1. boxes 表（Box 主表）
+-- 1. boxes 表 (Box main table)
 -- ============================================
--- Box 表存储链上事件数据，MetadataBox 数据作为关联表独立存储
--- 事件：
---      Exchange合约：BoxListed, BoxPurchased, BidPlaced, CompleterAssigned, RequestDeadlineChanged, ReviewDeadlineChanged, RefundPermitChanged，
---      TruthBox合约： BoxCreated, BoxStatusChanged, PriceChanged, DeadlineChanged, PrivateKeyPublished
+-- Box table stores chain event data, MetadataBox data is stored as an independent associated table
+-- Events:
+--      Exchange contract: BoxListed, BoxPurchased, BidPlaced, CompleterAssigned, RequestDeadlineChanged, ReviewDeadlineChanged, RefundPermitChanged,
+--      TruthBox contract: BoxCreated, BoxStatusChanged, PriceChanged, DeadlineChanged, PrivateKeyPublished
 CREATE TABLE IF NOT EXISTS boxes (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  -- 基础标识
+  -- Basic identifier
   id NUMERIC(78, 0) NOT NULL, -- boxId 
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
-  token_id NUMERIC(78, 0) NOT NULL, -- NFT tokenId，与 boxId 相同
-  token_uri TEXT, -- NFT tokenURI（当前不会写入该字段，预留扩展）
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
+  token_id NUMERIC(78, 0) NOT NULL, -- NFT tokenId, same as boxId
+  token_uri TEXT, -- NFT tokenURI (currently not written to this field, reserved for extension)
   
-  -- 链上数据字段
-  box_info_cid TEXT, -- BoxCreated 事件中的 CID（用于关联 MetadataBox）
+  -- Chain event data fields
+  box_info_cid TEXT, -- CID (for associating MetadataBox) in BoxCreated event
   private_key TEXT, 
   price NUMERIC(78, 0) NOT NULL DEFAULT 0, 
   deadline NUMERIC(78, 0) NOT NULL DEFAULT 0, 
   
-  -- 用户关系
+  -- User relationships
   minter_id NUMERIC(78, 0) NOT NULL, -- UserId
-  owner_address TEXT NOT NULL, -- NFT owner address (钱包地址)
+  owner_address TEXT NOT NULL, -- NFT owner address (wallet address)
   publisher_id NUMERIC(78, 0), -- UserId
   seller_id NUMERIC(78, 0), -- UserId
   buyer_id NUMERIC(78, 0), -- UserId
   completer_id NUMERIC(78, 0), -- UserId 
   
-  -- 状态和时间戳
+  -- Status and timestamps
   status TEXT NOT NULL CHECK (status IN (
     'Storing', 'Selling', 'Auctioning', 'Paid', 
     'Refunding', 'InSecrecy', 'Published', 'Blacklisted'
   )),
   
-  -- 交易相关
+  -- Transaction related
   listed_mode TEXT CHECK (listed_mode IN ('Selling', 'Auctioning')), 
   accepted_token TEXT, 
   refund_permit BOOLEAN, 
   
-  -- 时间戳字段
+  -- Timestamp fields
   create_timestamp NUMERIC(78, 0) NOT NULL, 
   publish_timestamp NUMERIC(78, 0), 
   listed_timestamp NUMERIC(78, 0), 
@@ -62,8 +54,8 @@ CREATE TABLE IF NOT EXISTS boxes (
 );
 
 -- ============================================
--- 2. users 表（用户表 - UserId）
--- 事件：所有事件参数中有 userId 的都关联到该表
+-- 2. users table (User table - UserId)
+-- Events: All events with userId are associated with this table
 -- ============================================
 CREATE TABLE IF NOT EXISTS users (
   
@@ -72,13 +64,13 @@ CREATE TABLE IF NOT EXISTS users (
   
   id NUMERIC(78, 0) NOT NULL, -- UserId 
   
-  PRIMARY KEY (network, layer, id) -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
 );
 
 
 -- ============================================
--- 11. box_bidders 表（Box 竞标者关联表）
--- 事件：BidPlaced
+-- 11. box_bidders table (Box bidder association table)
+-- Events: BidPlaced
 -- ============================================
 CREATE TABLE IF NOT EXISTS box_bidders (
   
@@ -88,22 +80,22 @@ CREATE TABLE IF NOT EXISTS box_bidders (
   id NUMERIC(78, 0) NOT NULL, -- boxId
   bidder_id NUMERIC(78, 0) NOT NULL, -- UserId
   
-  PRIMARY KEY (network, layer, id, bidder_id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id, bidder_id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
   FOREIGN KEY (network, layer, bidder_id) REFERENCES users(network, layer, id) ON DELETE CASCADE
 );
 
 
 -- ============================================
--- 3. user_addresses 表（用户地址表 - User2）
--- 事件：Blacklist， Transfer(TruthNFT)
+-- 3. user_addresses table (User address table - User2)
+-- Events: Blacklist, Transfer(TruthNFT)
 -- ============================================
 CREATE TABLE IF NOT EXISTS user_addresses (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL, -- userAddress（地址）
+  id TEXT NOT NULL, -- userAddress (address)
   
   PRIMARY KEY (network, layer, id), 
   is_blacklisted BOOLEAN NOT NULL DEFAULT FALSE
@@ -111,13 +103,12 @@ CREATE TABLE IF NOT EXISTS user_addresses (
 
 
 -- ============================================
--- 4. metadata_boxes 表（MetadataBox 关联表）
--- 事件：BoxCreated
--- 只能insert，不能update
+-- 4. metadata_boxes table (MetadataBox association table)
+-- Events: BoxCreated
+-- Can only insert, cannot update
 -- ============================================
--- 存储从 IPFS 获取的 MetadataBox JSON 数据，通过 id（boxId）与 boxes 表关联
+-- Store MetadataBox JSON data retrieved from IPFS, associated with boxes table via id (boxId)
 CREATE TABLE IF NOT EXISTS metadata_boxes (
-  -- 网络划分（与 boxes 表一致）
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
@@ -126,7 +117,7 @@ CREATE TABLE IF NOT EXISTS metadata_boxes (
   PRIMARY KEY (network, layer, id), 
   FOREIGN KEY (network, layer, id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
   
-  -- BoxInfo 字段
+  -- BoxInfo fields
   type_of_crime TEXT, 
   label TEXT[], 
   title TEXT, 
@@ -151,9 +142,9 @@ CREATE TABLE IF NOT EXISTS metadata_boxes (
 
 
 -- ============================================
--- 5. payments 表（支付记录表）
--- 事件：OrderAmountPaid
--- 只能insert，不能update
+-- 5. payments table (Payment record table)
+-- Events: OrderAmountPaid
+-- Can only insert, cannot update
 -- ============================================
 CREATE TABLE IF NOT EXISTS payments (
   
@@ -164,7 +155,7 @@ CREATE TABLE IF NOT EXISTS payments (
   box_id NUMERIC(78, 0) NOT NULL,
   user_id NUMERIC(78, 0) NOT NULL, -- UserId
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
   token TEXT NOT NULL, 
@@ -175,9 +166,9 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 -- ============================================
--- 6. withdraws 表（提取记录表）
--- 事件：OrderAmountWithdraw, HelperRewrdsWithdraw, MinterRewardsWithdraw
--- 只能insert，不能update
+-- 6. withdraws table (Withdraw record table)
+-- Events: OrderAmountWithdraw, HelperRewrdsWithdraw, MinterRewardsWithdraw
+-- Can only insert, cannot update
 -- ============================================
 CREATE TABLE IF NOT EXISTS withdraws (
   
@@ -186,10 +177,10 @@ CREATE TABLE IF NOT EXISTS withdraws (
   
   id TEXT NOT NULL, -- Transaction hash - log index
   token TEXT NOT NULL, 
-  box_list NUMERIC(78, 0)[] NOT NULL, -- Box ID 列表
+  box_list NUMERIC(78, 0)[] NOT NULL, -- Box ID list
   user_id NUMERIC(78, 0) NOT NULL, -- UserId
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
   withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Order', 'Refund', 'Helper', 'Minter')),
   amount NUMERIC(78, 0) NOT NULL,
@@ -199,41 +190,41 @@ CREATE TABLE IF NOT EXISTS withdraws (
 );
 
 -- ============================================
--- 7. rewards_addeds 表（奖励添加事件记录表）
--- 事件：RewardAmountAdded
--- 只能insert，不能update
+-- 7. rewards_addeds table (Reward added event record table)
+-- Events: RewardAmountAdded
+-- Can only insert, cannot update
 -- ============================================
--- 记录每次 RewardAmountAdded 事件，用于事件溯源
--- 事件同步脚本将链上事件写入此表，触发器监听此表并更新聚合表
+-- Record each RewardAmountAdded event, for event tracking
+-- Event sync script will write chain events to this table, triggers will listen to this table and update aggregate tables
 CREATE TABLE IF NOT EXISTS rewards_addeds (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL, -- Transaction hash - log index（用于唯一标识每次事件）
+  id TEXT NOT NULL, -- Transaction hash - log index (for unique identification of each event)
   box_id NUMERIC(78, 0) NOT NULL, 
   token TEXT NOT NULL, -- Token address
-  reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer', 'Total')), -- 注意：包含 'Total'
+  reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer', 'Total')), -- Note: includes 'Total'
   amount NUMERIC(78, 0) NOT NULL,
   timestamp NUMERIC(78, 0) NOT NULL,
   transaction_hash BYTEA NOT NULL,
   block_number NUMERIC(78, 0) NOT NULL,
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE
 );
 
 -- ============================================
--- 8. box_rewards 表（Box 总奖励金额聚合表）
+-- 8. box_rewards table (Box total reward amount aggregation table)
 -- ============================================
--- 记录每个 box 的每种奖励类型、每种代币的总奖励金额（聚合数据）
--- 监听：rewards_addeds 表 INSERT，由触发器自动累加
--- ⚠️ 禁止手动写入/更新，完全由触发器自动管理
+-- Record the total reward amount of each type of reward for each box, for aggregate data
+-- Listen to rewards_addeds table INSERT, automatically accumulated by triggers
+-- ⚠️ Do not allow manual insertion/update, completely managed by triggers
 CREATE TABLE IF NOT EXISTS box_rewards (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
-  id TEXT NOT NULL, -- box_id-reward_type-token 复合键
+  id TEXT NOT NULL, -- box_id-reward_type-token composite key
   box_id NUMERIC(78, 0) NOT NULL,
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer', 'Total')), 
   token TEXT NOT NULL, 
@@ -244,16 +235,16 @@ CREATE TABLE IF NOT EXISTS box_rewards (
 );
 
 -- ============================================
--- 9. user_rewards 表（用户奖励金额详情表）
+-- 9. user_rewards table (User reward amount detail table)
 -- ============================================
--- 记录每个用户的每种奖励类型、每种代币的总奖励金额,
--- 监听：rewards_addeds表，累加
--- ⚠️ 禁止手动写入/更新，完全由触发器自动管理
+-- Record the total reward amount of each type of reward for each user, for each token, for detail data
+-- Listen to rewards_addeds table INSERT, automatically accumulated by triggers
+-- ⚠️ Do not allow manual insertion/update, completely managed by triggers
 CREATE TABLE IF NOT EXISTS user_rewards (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
-  id TEXT NOT NULL, -- user_id-reward_type-token 复合键
+  id TEXT NOT NULL, -- user_id-reward_type-token composite key
   user_id NUMERIC(78, 0) NOT NULL, 
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer')), 
   token TEXT NOT NULL, 
@@ -264,17 +255,18 @@ CREATE TABLE IF NOT EXISTS user_rewards (
 );
 
 -- ============================================
--- 10. user_withdraws 表（用户总提取金额详情表）
+-- 10. user_withdraws table (User total withdrawal amount detail table)
 -- ============================================
--- 监听：withdraws表，累加
--- ⚠️ 禁止手动写入/更新，完全由触发器自动管理
+-- Record the total withdrawal amount of each type of withdrawal for each user, for each token, for detail data
+-- Listen to withdraws table INSERT, automatically accumulated by triggers
+-- ⚠️ Do not allow manual insertion/update, completely managed by triggers
 CREATE TABLE IF NOT EXISTS user_withdraws (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
-  id TEXT NOT NULL, -- user_id-withdraw_type-token 复合键
+  id TEXT NOT NULL, -- user_id-withdraw_type-token composite key
   user_id NUMERIC(78, 0) NOT NULL, 
-  withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Helper', 'Minter')), -- 提取类型
+  withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Helper', 'Minter')), -- Withdraw type
   token TEXT NOT NULL, 
   PRIMARY KEY (network, layer, id),
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
@@ -283,46 +275,46 @@ CREATE TABLE IF NOT EXISTS user_withdraws (
 );
 
 -- ============================================
--- 12. box_user_order_amounts 表（Box 用户（buyer/bidder）每种代币的资金状态表）
+-- 12. box_user_order_amounts table (Box user (buyer/bidder) each token的资金状态表)
 -- ============================================
--- 理论上只有一种token，因为box.accepted_token是唯一的
--- 监听：payments表，累加
--- 监听：withdraws表，累减（清零处理）
--- 监听：rewards_addeds表，（将box.buyer的资金清零）
--- ⚠️ 禁止手动写入/更新，完全由触发器自动管理
+-- Theoretically only one token, because box.accepted_token is unique
+-- Listen to payments table INSERT, automatically accumulated by triggers
+-- Listen to withdraws table INSERT, automatically accumulated by triggers
+-- Listen to rewards_addeds table INSERT, automatically accumulated by triggers
+-- ⚠️ Do not allow manual insertion/update, completely managed by triggers
 CREATE TABLE IF NOT EXISTS box_user_order_amounts (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL, -- user_id-box_id-token 复合键
+  id TEXT NOT NULL, -- user_id-box_id-token composite key
   user_id NUMERIC(78, 0) NOT NULL, -- UserId
   box_id NUMERIC(78, 0) NOT NULL, -- box_id
   token TEXT NOT NULL, 
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
   
   amount NUMERIC(78, 0) NOT NULL DEFAULT 0,
   
-  -- 唯一约束：每个用户在每个 box 的每个代币只有一条记录
+  -- Unique constraint: Each user has only one record for each token in each box
   UNIQUE(network, layer, user_id, box_id, token)
 );
 
 -- ============================================
--- 13. statistical_state 表（统计状态表 - 单例）
--- 监听：boxes表，status变更时，累加和累减
--- ⚠️ 禁止手动写入/更新，完全由触发器自动管理
+-- 13. statistical_state table (Statistical state table - singleton)
+-- Listen to boxes table, when status changes, accumulate and subtract
+-- ⚠️ Do not allow manual insertion/update, completely managed by triggers
 -- ============================================
 CREATE TABLE IF NOT EXISTS statistical_state (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL DEFAULT 'statistical', -- 单例 ID
+  id TEXT NOT NULL DEFAULT 'statistical', -- Singleton ID
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   total_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
   storing_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
   selling_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
@@ -335,36 +327,36 @@ CREATE TABLE IF NOT EXISTS statistical_state (
 );
 
 -- ============================================
--- 14. fund_manager_state 表（资金管理器状态表 - 单例）
+-- 14. fund_manager_state table (Fund manager state table - singleton)
 -- ============================================
--- 注意：需要在 token_total_amounts 之前创建，因为外键依赖
--- 实际上它没有实际作用，但是可以保留，用于未来扩展
+-- Note: It needs to be created before token_total_amounts, because of foreign key dependency
+-- It has no practical function, but can be kept for future expansion
 CREATE TABLE IF NOT EXISTS fund_manager_state (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL DEFAULT 'fundManager', -- 单例 ID
+  id TEXT NOT NULL DEFAULT 'fundManager', -- Singleton ID
   
-  PRIMARY KEY (network, layer, id) -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
 );
 
 -- ============================================
--- 15. token_total_amounts 表（代币总金额表）
+-- 15. token_total_amounts table (Token total amount table)
 -- ============================================
--- 监听：payments和withdraws表，累加
--- 监听：rewards_addeds表，累加
--- ⚠️ 禁止手动写入/更新，完全由触发器自动管理
+-- Listen to payments and withdraws table INSERT, automatically accumulated by triggers
+-- Listen to rewards_addeds table INSERT, automatically accumulated by triggers
+-- ⚠️ Do not allow manual insertion/update, completely managed by triggers
 CREATE TABLE IF NOT EXISTS token_total_amounts (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL, -- tokenAddress-fundsType 复合键
+  id TEXT NOT NULL, -- tokenAddress-fundsType composite key
   token TEXT NOT NULL, 
   fund_manager_id TEXT NOT NULL DEFAULT 'fundManager',
   
-  PRIMARY KEY (network, layer, id), -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, fund_manager_id) REFERENCES fund_manager_state(network, layer, id) ON DELETE CASCADE,
   funds_type TEXT NOT NULL CHECK (funds_type IN (
     'OrderPaid',    
@@ -376,30 +368,38 @@ CREATE TABLE IF NOT EXISTS token_total_amounts (
   )),
   amount NUMERIC(78, 0) NOT NULL DEFAULT 0,
   
-  -- 唯一约束（包含网络字段）
+  -- Unique constraint (contains network field)
   UNIQUE(network, layer, token, funds_type)
 );
 
 -- ============================================
--- 16. sync_status 表（同步状态表 - 用于事件同步脚本）
+-- 16. sync_status table (Sync status table - for event sync script)
 -- ============================================
--- 每个网络有独立的同步状态
+-- Each contract has independent sync status
 CREATE TABLE IF NOT EXISTS sync_status (
   
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id INTEGER NOT NULL DEFAULT 1,
+  contract_name TEXT NOT NULL CHECK (contract_name IN ('TRUTH_BOX', 'EXCHANGE', 'FUND_MANAGER', 'TRUTH_NFT', 'USER_ID')),
   last_synced_block NUMERIC(78, 0) NOT NULL DEFAULT 0,
   last_synced_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   
-  PRIMARY KEY (network, layer, id) -- 复合主键包含网络字段
+  PRIMARY KEY (network, layer, contract_name) -- Composite primary key contains network field and contract name
 );
 
--- 初始化 sync_status 记录（为每个网络创建初始记录）
-INSERT INTO sync_status (network, layer, id, last_synced_block, last_synced_at)
+-- Initialize sync_status records (create initial records for each network and each contract)
+INSERT INTO sync_status (network, layer, contract_name, last_synced_block, last_synced_at)
 VALUES 
-  ('testnet', 'sapphire', 1, 0, NOW()),
-  ('mainnet', 'sapphire', 1, 0, NOW())
-ON CONFLICT (network, layer, id) DO NOTHING;
+  ('testnet', 'sapphire', 'TRUTH_BOX', 0, NOW()),
+  ('testnet', 'sapphire', 'EXCHANGE', 0, NOW()),
+  ('testnet', 'sapphire', 'FUND_MANAGER', 0, NOW()),
+  ('testnet', 'sapphire', 'TRUTH_NFT', 0, NOW()),
+  ('testnet', 'sapphire', 'USER_ID', 0, NOW()),
+  ('mainnet', 'sapphire', 'TRUTH_BOX', 0, NOW()),
+  ('mainnet', 'sapphire', 'EXCHANGE', 0, NOW()),
+  ('mainnet', 'sapphire', 'FUND_MANAGER', 0, NOW()),
+  ('mainnet', 'sapphire', 'TRUTH_NFT', 0, NOW()),
+  ('mainnet', 'sapphire', 'USER_ID', 0, NOW())
+ON CONFLICT (network, layer, contract_name) DO NOTHING;
 

@@ -1,16 +1,16 @@
-# 环境变量文件
+# Environment variable files
 .env
 .env.test
 .env.local
 
-# 依赖
+# Dependencies
 node_modules/
 
-# 构建输出
+# Build output
 dist/
 *.log
 
-# 测试覆盖率
+# Test coverage
 coverage/
 
 # IDE

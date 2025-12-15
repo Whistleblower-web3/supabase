@@ -7,7 +7,7 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/**/*.test.ts'],
     exclude: ['node_modules', 'dist'],
-    setupFiles: ['tests/global-setup.ts'], // 全局设置文件，包含清理钩子
+    setupFiles: ['tests/global-setup.ts'], // global setup file, contains cleanup hooks
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

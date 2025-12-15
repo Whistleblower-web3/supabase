@@ -1,26 +1,16 @@
--- WikiTruth Supabase 数据库迁移文件
--- 06_triggers.sql - 创建自动更新聚合表的触发器
--- 
--- 说明：
--- 应用端会提取事件参数数据并写入业务表，触发器监听业务表的变化
--- 使用数据库触发器实现"新旧数据相加"的逻辑
-
--- 注意：box_rewards 中的 Total 类型是直接累加的，不需要计算Minter+Seller+Completer的奖励
--- 因为合约中已经计算了 Total，rewards_addeds 表中会包含 Total 类型的记录
--- 触发器 update_box_rewards_on_rewards_added 会自动累加所有类型（包括 Total）的奖励
 
 -- ============================================
--- 触发器函数：更新 box_rewards 表（累加奖励）
+-- Trigger function: update box_rewards table (accumulate rewards)
 -- ============================================
--- 监听：rewards_addeds 表 INSERT
--- 当 RewardAmountAdded 事件插入时，累加到 box_rewards 表
--- 根据box_id、reward_type、token累加amount
+-- Listen to: rewards_addeds table INSERT
+-- When the RewardAmountAdded event is inserted, accumulate to the box_rewards table
+-- Accumulate amount based on box_id, reward_type, and token
 CREATE OR REPLACE FUNCTION update_box_rewards_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
     v_reward_id TEXT;
 BEGIN
-    -- 累加奖励到 box_rewards 表
+    -- Accumulate rewards to the box_rewards table
     v_reward_id := NEW.box_id::TEXT || '-' || NEW.reward_type || '-' || NEW.token;
     INSERT INTO box_rewards (
         network, layer, id, box_id, reward_type, token, amount
@@ -36,7 +26,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
+-- Create trigger
 CREATE TRIGGER trigger_update_box_rewards_on_rewards_added
 AFTER INSERT ON rewards_addeds
 FOR EACH ROW
@@ -44,21 +34,20 @@ EXECUTE FUNCTION update_box_rewards_on_rewards_added();
 
 
 -- ============================================
--- 触发器函数：更新 user_withdraws 表 （累加提取金额）
+-- Trigger function: update user_withdraws table (accumulate withdrawal amount)
 -- ============================================
--- 监听：withdraws 表 INSERT
--- 只处理 Helper 和 Minter 类型的提取
+-- Listen to: withdraws table INSERT
+-- Only process Helper and Minter type of withdrawal
 CREATE OR REPLACE FUNCTION update_user_withdraws_on_withdraw()
 RETURNS TRIGGER AS $$
 DECLARE
     v_id TEXT;
 BEGIN
-    -- 只处理 Helper 和 Minter 类型的提取
     IF NEW.withdraw_type NOT IN ('Helper', 'Minter') THEN
         RETURN NEW;
     END IF;
 
-    -- 更新 user_withdraws 表（累加）
+    -- Update user_withdraws table (accumulate)
     v_id := NEW.user_id::TEXT || '-' || NEW.withdraw_type || '-' || NEW.token;
     INSERT INTO user_withdraws (
         network, layer, id, user_id, withdraw_type, token, amount
@@ -74,7 +63,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
 CREATE TRIGGER trigger_update_user_withdraws_on_withdraw
 AFTER INSERT ON withdraws
 FOR EACH ROW
@@ -82,11 +70,11 @@ WHEN (NEW.withdraw_type IN ('Helper', 'Minter'))
 EXECUTE FUNCTION update_user_withdraws_on_withdraw();
 
 -- ============================================
--- 触发器函数：更新 user_rewards 表（奖励添加）
+-- Trigger function: update user_rewards table (reward added)
 -- ============================================
--- 监听：rewards_addeds 表 INSERT
--- 需要根据 boxId 查找 minter_id/seller_id/completer_id
--- 然后根据minter_id/seller_id/completer_id累加amount
+-- Listen to: rewards_addeds table INSERT
+-- Need to find minter_id/seller_id/completer_id based on boxId
+-- Then accumulate amount based on minter_id/seller_id/completer_id
 CREATE OR REPLACE FUNCTION update_user_rewards_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -97,12 +85,11 @@ DECLARE
     v_user_reward_id TEXT;
     v_amount_change NUMERIC(78, 0);
 BEGIN
-    -- 只处理 Minter、Seller、Completer 类型的奖励
     IF NEW.reward_type NOT IN ('Minter', 'Seller', 'Completer') THEN
         RETURN NEW;
     END IF;
 
-    -- 获取 box 的用户信息
+    -- Get user information from box
     SELECT minter_id, seller_id, completer_id
     INTO v_minter_id, v_seller_id, v_completer_id
     FROM boxes
@@ -110,14 +97,14 @@ BEGIN
         AND layer = NEW.layer 
         AND id = NEW.box_id;
 
-    -- 计算金额变化量
+    -- Calculate amount change
     IF TG_OP = 'INSERT' THEN
         v_amount_change := NEW.amount;
     ELSE
         v_amount_change := NEW.amount - COALESCE(OLD.amount, 0);
     END IF;
 
-    -- 根据奖励类型确定用户
+    -- Determine user based on reward type
     v_user_id := CASE NEW.reward_type
         WHEN 'Minter' THEN v_minter_id
         WHEN 'Seller' THEN v_seller_id
@@ -125,13 +112,13 @@ BEGIN
         ELSE NULL
     END;
 
-    -- 如果用户 ID 为空，跳过
+    -- If user ID is empty, skip
     IF v_user_id IS NULL THEN
         RETURN NEW;
     END IF;
 
-    -- 更新用户奖励（Minter/Seller/Completer）
-    -- 注意：user_rewards 中不包含 Total 类型，只记录分配给具体角色的奖励
+    -- Update user rewards (Minter/Seller/Completer)
+    -- Note: user_rewards does not include Total type, only records rewards assigned to specific roles
     v_user_reward_id := v_user_id::TEXT || '-' || NEW.reward_type || '-' || NEW.token;
     INSERT INTO user_rewards (
         network, layer, id, user_id, reward_type, token, amount
@@ -148,7 +135,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
+-- Create trigger
 CREATE TRIGGER trigger_update_user_rewards_on_rewards_added
 AFTER INSERT OR UPDATE ON box_rewards
 FOR EACH ROW
@@ -157,16 +144,16 @@ EXECUTE FUNCTION update_user_rewards_on_rewards_added();
 
 
 -- ============================================
--- 触发器函数：更新 box_user_order_amounts 表（支付）
+-- Trigger function: update box_user_order_amounts table (payment)
 -- ============================================
--- 监听：payments 表 INSERT
--- 所有支付都累加到 box_user_order_amounts
+-- Listen to: payments table INSERT
+-- All payments are accumulated to box_user_order_amounts
 CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_payment()
 RETURNS TRIGGER AS $$
 DECLARE
     v_fund_id TEXT;
 BEGIN
-    -- 累加支付金额到 box_user_order_amounts
+    -- Accumulate payment amount to box_user_order_amounts
     v_fund_id := NEW.user_id::TEXT || '-' || NEW.box_id::TEXT || '-' || NEW.token;
     INSERT INTO box_user_order_amounts (
         network, layer, id, user_id, box_id, token, amount
@@ -182,37 +169,35 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
 CREATE TRIGGER trigger_update_box_user_order_amounts_on_payment
 AFTER INSERT ON payments
 FOR EACH ROW
 EXECUTE FUNCTION update_box_user_order_amounts_on_payment();
 
 -- ============================================
--- 触发器函数：更新 box_user_order_amounts 表（提取）
+-- Trigger function: update box_user_order_amounts table (withdraw)
 -- ============================================
--- 监听：withdraws 表 INSERT
--- withdraw_type: 'Order' 或 'Refund' -> 清零对应box、user的order资金（合约中 withdraw 是提取全部资金）
+-- Listen to: withdraws table INSERT
+-- withdraw_type: 'Order' or 'Refund' -> clear order funds for corresponding box and user (in the contract, withdraw is to withdraw all funds)
 CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_withdraw()
 RETURNS TRIGGER AS $$
 DECLARE
     v_box_id NUMERIC(78, 0);
     v_user_id NUMERIC(78, 0);
 BEGIN
-    -- 只处理 Order 和 Refund 类型的提取
     IF NEW.withdraw_type NOT IN ('Order', 'Refund') THEN
         RETURN NEW;
     END IF;
 
-    -- user_id 在 withdraws 表中是 NUMERIC(78, 0)，直接使用
+    -- user_id in withdraws table is NUMERIC(78, 0), directly use
     v_user_id := NEW.user_id;
 
-    -- 如果 box_list 为空，跳过
+    -- If box_list is empty, skip
     IF NEW.box_list IS NULL OR array_length(NEW.box_list, 1) = 0 THEN
         RETURN NEW;
     END IF;
 
-    -- 遍历 box_list，清零每个 box 的资金（合约中 withdraw 是提取全部资金）
+    -- Loop through box_list, clear the funds of each box (in the contract, withdraw is to withdraw all funds)
     FOREACH v_box_id IN ARRAY NEW.box_list
     LOOP
         UPDATE box_user_order_amounts
@@ -228,7 +213,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
 CREATE TRIGGER trigger_update_box_user_order_amounts_on_withdraw
 AFTER INSERT ON withdraws
 FOR EACH ROW
@@ -236,25 +220,24 @@ WHEN (NEW.withdraw_type IN ('Order', 'Refund'))
 EXECUTE FUNCTION update_box_user_order_amounts_on_withdraw();
 
 -- ============================================
--- 触发器函数：更新 box_user_order_amounts 表（清零buyer的资金）
+-- Trigger function: update box_user_order_amounts table (clear buyer's funds)
 -- ============================================
--- 监听：rewards_addeds 表 INSERT（只处理Seller/Completer 类型），
+-- Listen to: rewards_addeds table INSERT (only process Seller/Completer type),
 CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
     v_buyer_id NUMERIC(78, 0);
 BEGIN
-    -- 只处理 Seller、Completer 类型的奖励（Total 类型不处理）
     IF NEW.reward_type NOT IN ('Seller', 'Completer') THEN
         RETURN NEW;
     END IF;
 
-    -- 只处理新增奖励的情况（INSERT）或金额增加的情况（UPDATE）
+    -- Only process新增奖励的情况（INSERT）或金额增加的情况（UPDATE）
     IF TG_OP = 'UPDATE' AND NEW.amount <= COALESCE(OLD.amount, 0) THEN
         RETURN NEW;
     END IF;
 
-    -- 获取 box 的 buyer_id
+    -- Get buyer_id from box
     SELECT buyer_id
     INTO v_buyer_id
     FROM boxes
@@ -262,12 +245,12 @@ BEGIN
         AND layer = NEW.layer 
         AND id = NEW.box_id;
 
-    -- 如果 buyer_id 为空，跳过
+    -- If buyer_id is empty, skip
     IF v_buyer_id IS NULL THEN
         RETURN NEW;
     END IF;
 
-    -- 清零 buyer 在该 box 该 token 的 order 资金
+    -- Clear buyer's order funds for this box and this token
     UPDATE box_user_order_amounts
     SET amount = 0
     WHERE network = NEW.network
@@ -280,7 +263,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
 CREATE TRIGGER trigger_update_box_user_order_amounts_on_rewards_added
 AFTER INSERT OR UPDATE ON box_rewards
 FOR EACH ROW
@@ -288,9 +270,9 @@ WHEN (NEW.reward_type IN ('Seller', 'Completer'))
 EXECUTE FUNCTION update_box_user_order_amounts_on_rewards_added();
 
 -- ============================================
--- 触发器函数：更新 token_total_amounts 表（支付）
+-- Trigger function: update token_total_amounts table (payment)
 -- ============================================
--- 监听：payments 表 INSERT -> OrderPaid
+-- Listen to: payments table INSERT -> OrderPaid
 CREATE OR REPLACE FUNCTION update_token_total_amounts_on_payment()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -312,7 +294,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
 CREATE TRIGGER trigger_update_token_total_amounts_on_payment
 AFTER INSERT ON payments
 FOR EACH ROW
@@ -320,35 +301,35 @@ EXECUTE FUNCTION update_token_total_amounts_on_payment();
 
 
 -- ============================================
--- 触发器函数：更新 token_total_amounts 表（RewardsAdded-Total）
+-- Trigger function: update token_total_amounts table (RewardsAdded-Total)
 -- ============================================
--- 监听：rewards_addeds 表 INSERT
--- 当 Total 类型的奖励添加时，更新 RewardsAdded 类型的 token_total_amounts
--- 注意：直接监听 rewards_addeds 表，因为只需要 Total 类型
+-- Listen to: rewards_addeds table INSERT
+-- When Total type of reward is added, update RewardsAdded type of token_total_amounts
+-- Note: directly listen to rewards_addeds table, because only Total type is needed
 CREATE OR REPLACE FUNCTION update_token_total_amounts_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
     v_id TEXT;
     v_amount_change NUMERIC(78, 0);
 BEGIN
-    -- 只处理 Total 类型的奖励
+    -- Only process Total type of reward
     IF NEW.reward_type != 'Total' THEN
         RETURN NEW;
     END IF;
 
-    -- 计算金额变化量
+    -- Calculate amount change
     IF TG_OP = 'INSERT' THEN
         v_amount_change := NEW.amount;
     ELSE
         v_amount_change := NEW.amount - COALESCE(OLD.amount, 0);
     END IF;
 
-    -- 如果金额没有变化，跳过
+    -- If amount is not changed, skip
     IF v_amount_change = 0 THEN
         RETURN NEW;
     END IF;
 
-    -- 更新 token_total_amounts 表
+    -- Update token_total_amounts table
     v_id := NEW.token || '-RewardsAdded';
     INSERT INTO token_total_amounts (
         network, layer, id, token, fund_manager_id, funds_type, amount
@@ -365,7 +346,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
+-- Create trigger
 CREATE TRIGGER trigger_update_token_total_amounts_on_rewards_added
 AFTER INSERT ON rewards_addeds
 FOR EACH ROW
@@ -373,9 +354,9 @@ EXECUTE FUNCTION update_token_total_amounts_on_rewards_added();
 
 
 -- ============================================
--- 触发器函数：更新 token_total_amounts 表（提取）
+-- Trigger function: update token_total_amounts table (withdraw)
 -- ============================================
--- 监听：withdraws 表 INSERT -> 依据withdraw_type更新token_total_amounts的funds_type
+-- Listen to: withdraws table INSERT -> update funds_type of token_total_amounts based on withdraw_type
 CREATE OR REPLACE FUNCTION update_token_total_amounts_on_withdraw()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -417,14 +398,14 @@ FOR EACH ROW
 EXECUTE FUNCTION update_token_total_amounts_on_withdraw();
 
 -- ============================================
--- 触发器函数：更新 statistical_state 表
+-- Trigger function: update statistical_state table
 -- ============================================
--- 监听：boxes 表 INSERT -> BoxCreated
--- 监听：boxes 表 UPDATE status -> BoxStatusChanged
+-- Listen to: boxes table INSERT -> BoxCreated
+-- Listen to: boxes table UPDATE status -> BoxStatusChanged
 CREATE OR REPLACE FUNCTION update_statistical_state_on_box_insert()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- 新 box 创建：total_supply +1，对应状态的 supply +1
+    -- New box created: total_supply +1, corresponding status supply +1
     INSERT INTO statistical_state (
         network, layer, id, total_supply,
         storing_supply, selling_supply, auctioning_supply, paid_supply,
@@ -460,12 +441,12 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION update_statistical_state_on_box_update()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- 只处理 status 字段的变化
+    -- Only process status field change
     IF OLD.status = NEW.status THEN
         RETURN NEW;
     END IF;
 
-    -- 更新统计：旧状态-1，新状态+1，total_supply 不变
+    -- Update statistical: old status -1, new status +1, total_supply unchanged
     INSERT INTO statistical_state (
         network, layer, id,
         storing_supply, selling_supply, auctioning_supply, paid_supply,
@@ -497,7 +478,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 创建触发器
 CREATE TRIGGER trigger_update_statistical_state_on_box_insert
 AFTER INSERT ON boxes
 FOR EACH ROW

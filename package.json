@@ -1,7 +1,7 @@
 {
   "name": "supabase",
   "version": "1.0.0",
-  "description": "本文档说明如何设置和使用 WikiTruth 项目的 Supabase 数据库。",
+  "description": "This is the Supabase project for the WikiTruth project.",
   "main": "index.js",
   "scripts": {
     "test": "vitest run",

@@ -7,9 +7,8 @@ const supabaseConfig = {
     serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
 };
 
-// 验证配置
 if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    throw new Error('缺少 Supabase 配置，请检查环境变量 SUPABASE_URL 和 SUPABASE_ANON_KEY');
+    throw new Error('Missing Supabase configuration, please check environment variables SUPABASE_URL and SUPABASE_ANON_KEY');
 }
 
 
@@ -22,14 +21,10 @@ export function createSupabaseClient(): SupabaseClient<Database> {
     });
 }
 
-/**
- * 创建 Supabase 服务端客户端（服务端使用）
- * 使用 Service Role Key，绕过 RLS 策略
- * 警告：仅在服务端使用，不要暴露给客户端
- */
+
 export function createSupabaseServiceClient(): SupabaseClient<Database> {
     if (!supabaseConfig.serviceRoleKey) {
-        throw new Error('缺少 SUPABASE_SERVICE_ROLE_KEY，无法创建服务端客户端');
+        throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY, cannot create service client');
     }
 
     return createClient<Database>(supabaseConfig.url, supabaseConfig.serviceRoleKey, {
@@ -42,34 +37,7 @@ export function createSupabaseServiceClient(): SupabaseClient<Database> {
 
 export const supabase = createSupabaseClient();
 
-// ### 📝 写入示例（rewards_addeds）
 
-// ```typescript
-// await supabase.from('rewards_addeds').insert({
-//     network: 'testnet',
-//     layer: 'sapphire',
-//     id: `${transactionHash}-${logIndex}`, // Transaction hash - log index
-//     box_id: boxId,
-//     token: token,
-//     amount: '1000000000000000000',
-//     reward_type: 'Minter', // Minter/Seller/Completer/Total
-//     timestamp: timestamp,
-//     transaction_hash: Buffer.from(transactionHash.slice(2), 'hex'), // BYTEA 类型（去掉 0x 前缀）
-//     block_number: blockNumber
-// });
-// ```
-
-
-/**
- * Supabase 数据库类型定义
- * 
- * 包含所有表的 Row、Insert、Update 类型定义
- * 以及所有函数的 Args 和 Returns 类型定义
- * 
- * Row: 表示查询结果的行数据
- * Insert和Update类型定义
- * 
- */
 export interface Database {
     public: {
         Tables: {
@@ -130,14 +98,6 @@ export interface Database {
                     request_refund_deadline?: string | null;
                     review_deadline?: string | null;
                 };
-                // ⚠️ 允许更新：多个事件会更新 boxes 表
-                // - BoxStatusChanged: 更新 status
-                // - PriceChanged: 更新 price
-                // - DeadlineChanged: 更新 deadline
-                // - PrivateKeyPublished: 更新 private_key
-                // - BoxPurchased: 更新 buyer_id, purchase_timestamp
-                // - CompleterAssigned: 更新 completer_id
-                // 触发器会监听 status 的更新来更新 statistical_state
                 Update: {
                     network?: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
@@ -214,7 +174,7 @@ export interface Database {
                     encryption_passwords?: Record<string, unknown> | null;
                     public_key?: string | null;
                 };
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             users: {
                 Row: {
@@ -227,7 +187,7 @@ export interface Database {
                     layer?: 'sapphire';
                     id: string;
                 }; 
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             user_addresses: {
                 Row: {
@@ -242,7 +202,7 @@ export interface Database {
                     id: string;
                     is_blacklisted?: boolean;
                 };
-                // ⚠️ 允许更新：Blacklist 事件会更新 is_blacklisted 字段
+                // ⚠️ Allow updates: Blacklist event will update is_blacklisted field
                 Update: {
                     network?: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
@@ -254,7 +214,7 @@ export interface Database {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
-                    id: string; // boxId（主键的一部分，对应 boxes.id）
+                    id: string; // boxId (part of the primary key, corresponding to boxes.id)
                     bidder_id: string;
                 };
                 Insert: {
@@ -263,7 +223,7 @@ export interface Database {
                     id: string; // boxId
                     bidder_id: string;
                 };
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             payments: {
                 Row: {
@@ -290,7 +250,7 @@ export interface Database {
                     transaction_hash: Uint8Array;
                     block_number: string;
                 };
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             withdraws: {
                 Row: {
@@ -319,7 +279,7 @@ export interface Database {
                     transaction_hash: Uint8Array;
                     block_number: string;
                 };
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             rewards_addeds: {
                 Row: {
@@ -346,7 +306,7 @@ export interface Database {
                     transaction_hash: Uint8Array;
                     block_number: string;
                 };
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             box_rewards: {
                 Row: {
@@ -358,8 +318,8 @@ export interface Database {
                     token: string;
                     amount: string;
                 };
-                // ⚠️ 禁止手动写入：此表由触发器自动管理
-                // 如果需要添加奖励，应该插入 rewards_addeds 表
+                // ⚠️ Do not allow manual insertion: This table is managed by triggers
+                // If you need to add rewards, you should insert into rewards_addeds table
                 Insert: never;
                 Update: never;
             };
@@ -373,8 +333,8 @@ export interface Database {
                     token: string;
                     amount: string;
                 };
-                // ⚠️ 禁止手动写入：此表由触发器自动管理
-                // user_rewards 中不包含 Total 类型，只记录分配给具体角色的奖励
+                // ⚠️ Do not allow manual insertion: This table is managed by triggers
+                // user_rewards does not include Total type, only records rewards assigned to specific roles
                 Insert: never;
                 Update: never;
             };
@@ -388,7 +348,7 @@ export interface Database {
                     token: string;
                     amount: string;
                 };
-                // ⚠️ 禁止手动写入：此表由触发器自动管理
+                // ⚠️ Do not allow manual insertion: This table is managed by triggers
                 Insert: never;
                 Update: never;
             };
@@ -403,8 +363,8 @@ export interface Database {
                     token: string;
                     amount: string;
                 };
-                // ⚠️ 禁止手动写入：此表由触发器自动管理
-                // 资金变化应该通过 payments、withdraws 和 rewards_addeds 表来触发
+                // ⚠️ Do not allow manual insertion: This table is managed by triggers
+                // Financial changes should be triggered by payments, withdraws and rewards_addeds tables
                 Insert: never;
                 Update: never;
             };
@@ -423,8 +383,8 @@ export interface Database {
                     published_supply: string;
                     blacklisted_supply: string;
                 };
-                // ⚠️ 禁止手动写入：此表由触发器自动管理
-                // 统计数据变化应该通过 boxes 表的插入和 status 更新来触发
+                // ⚠️ Do not allow manual insertion: This table is managed by triggers
+                // Statistical data changes should be triggered by inserting into boxes table and updating status
                 Insert: never;
                 //  TODO  In tests, do not use this update, it will be removed in production
                 Update: {
@@ -453,7 +413,7 @@ export interface Database {
                     layer?: 'sapphire';
                     id?: string;
                 };
-                Update: never; // 禁止后续更新
+                Update: never; // Do not allow subsequent updates
             };
             token_total_amounts: {
                 Row: {
@@ -465,8 +425,8 @@ export interface Database {
                     funds_type: 'OrderPaid' | 'OrderWithdraw' | 'RefundWithdraw' | 'RewardsAdded' | 'HelperRewardsWithdraw' | 'MinterRewardsWithdraw';
                     amount: string;
                 };
-                // ⚠️ 禁止手动写入：此表由触发器自动管理
-                // 总金额变化应该通过业务表（payments、withdraws、box_rewards）来触发
+                // ⚠️ Do not allow manual insertion: This table is managed by triggers
+                // Total amount changes should be triggered by business tables (payments, withdraws, box_rewards)
                 Insert: never;
                 Update: never;
             };
@@ -474,22 +434,22 @@ export interface Database {
                 Row: {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
-                    id: string;
+                    contract_name: string;
                     last_synced_block: string;
                     last_synced_at: string;
                 };
                 Insert: {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id?: string;
+                    contract_name: string;
                     last_synced_block?: string;
                     last_synced_at?: string;
                 };
-                // ⚠️ 允许更新：事件同步脚本需要更新同步状态
+                // ⚠️ Allow updates: Event sync script needs to update sync status
                 Update: {
                     network?: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
-                    id?: string;
+                    contract_name?: string;
                     last_synced_block?: string;
                     last_synced_at?: string;
                 };

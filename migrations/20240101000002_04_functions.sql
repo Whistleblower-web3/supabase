@@ -1,13 +1,13 @@
--- 迁移：删除所有旧版本的 search_boxes 函数重载
--- 使用 CASCADE 删除所有重载版本，避免函数不唯一错误
+-- Delete all old versions of the search_boxes function overloads
+-- Use CASCADE to delete all overload versions, avoid function not unique error
 DROP FUNCTION IF EXISTS search_boxes CASCADE;
 
 -- ============================================
--- 全文搜索函数：search_boxes
+-- Full text search function: search_boxes
 -- ============================================
--- 支持全文搜索、精确筛选和复合查询
--- 关联 metadata_boxes 表获取元数据信息
--- 必须指定网络参数以区分不同网络的数据
+-- Supports full text search, precise filtering and composite queries
+-- Related metadata_boxes table to get metadata information
+-- Must specify network parameter to distinguish data from different networks
 CREATE OR REPLACE FUNCTION search_boxes(
   network_filter TEXT DEFAULT NULL,
   layer_filter TEXT DEFAULT 'sapphire',
@@ -16,13 +16,13 @@ CREATE OR REPLACE FUNCTION search_boxes(
   type_of_crime_filter TEXT[] DEFAULT NULL,
   country_filter TEXT[] DEFAULT NULL,
   label_filter TEXT[] DEFAULT NULL,
-  accepted_token_filter TEXT[] DEFAULT NULL,  -- 按接受的代币过滤（支持多个代币）
+  accepted_token_filter TEXT[] DEFAULT NULL,  -- Filter by accepted token (supports multiple tokens)
   min_price NUMERIC DEFAULT NULL,
   max_price NUMERIC DEFAULT NULL,
   min_timestamp NUMERIC DEFAULT NULL,
   max_timestamp NUMERIC DEFAULT NULL,
-  sort_by TEXT DEFAULT 'relevance',  -- 排序字段：'relevance' | 'price' | 'event_date' | 'box_id'
-  sort_direction TEXT DEFAULT 'desc',  -- 排序方向：'asc' | 'desc'
+  sort_by TEXT DEFAULT 'relevance',  -- Sort by field: 'relevance' | 'price' | 'event_date' | 'box_id'
+  sort_direction TEXT DEFAULT 'desc',  -- Sort direction: 'asc' | 'desc'
   limit_count INTEGER DEFAULT 20,
   offset_count INTEGER DEFAULT 0
 )
@@ -44,7 +44,7 @@ RETURNS TABLE (
   relevance REAL
 ) AS $$
 BEGIN
-  -- 参数验证
+  -- Parameter validation
   IF network_filter IS NULL THEN
     RAISE EXCEPTION 'network_filter cannot be NULL';
   END IF;
@@ -55,7 +55,7 @@ BEGIN
     RAISE EXCEPTION 'layer_filter must be ''sapphire''';
   END IF;
   
-  -- 验证排序参数
+  -- Validate sort parameters
   IF sort_by NOT IN ('relevance', 'price', 'event_date', 'box_id') THEN
     RAISE EXCEPTION 'sort_by must be ''relevance'', ''price'', ''event_date'', or ''box_id''';
   END IF;
@@ -81,28 +81,28 @@ BEGIN
     b.accepted_token,
     CASE 
       WHEN search_query IS NOT NULL THEN
-        -- 加权相关性评分
+        -- Weighted relevance score
         (
-          -- 精确匹配 boxId（最高优先级）
+          -- Exact match boxId (highest priority)
           CASE WHEN b.id::TEXT = search_query THEN 10.0 ELSE 0 END +
-          -- 全文搜索相关性（title 和 description）
+          -- Full text search relevance (title and description)
           ts_rank(
             to_tsvector('english', COALESCE(mb.title, '') || ' ' || COALESCE(mb.description, '')),
             plainto_tsquery('english', search_query)
           ) * 5.0 +
-          -- title 模糊匹配
+          -- title fuzzy matching
           CASE WHEN mb.title ILIKE '%' || search_query || '%' THEN 3.0 ELSE 0 END +
-          -- description 模糊匹配
+          -- description fuzzy matching
           CASE WHEN mb.description ILIKE '%' || search_query || '%' THEN 2.0 ELSE 0 END +
-          -- type_of_crime 模糊匹配
+          -- type_of_crime fuzzy matching
           CASE WHEN mb.type_of_crime ILIKE '%' || search_query || '%' THEN 2.0 ELSE 0 END +
-          -- country 模糊匹配
+          -- country fuzzy matching
           CASE WHEN mb.country ILIKE '%' || search_query || '%' THEN 1.5 ELSE 0 END +
-          -- state 模糊匹配
+          -- state fuzzy matching
           CASE WHEN mb.state ILIKE '%' || search_query || '%' THEN 1.5 ELSE 0 END +
-          -- label 匹配
+          -- label matching
           CASE WHEN mb.label IS NOT NULL AND search_query = ANY(mb.label) THEN 2.0 ELSE 0 END +
-          -- status 模糊匹配
+          -- status fuzzy matching
           CASE WHEN b.status ILIKE '%' || search_query || '%' THEN 1.0 ELSE 0 END
         )::REAL
       ELSE 0::REAL
@@ -113,49 +113,49 @@ BEGIN
     b.network = network_filter
     AND b.layer = layer_filter
     AND (
-      -- 如果没有搜索查询，返回所有结果
+      -- If there is no search query, return all results
       search_query IS NULL OR
       search_query = '' OR
-      -- 精确匹配：boxId（支持文本和数字，最高优先级）
+      -- Exact match: boxId (supports text and number, highest priority)
       b.id::TEXT = search_query OR
-      -- 全文搜索：title 和 description（需要非空且能成功解析查询）
+      -- Full text search: title and description (needs to be non-empty and can successfully parse the query)
       (mb.title IS NOT NULL OR mb.description IS NOT NULL) AND
       to_tsvector('english', COALESCE(mb.title, '') || ' ' || COALESCE(mb.description, '')) 
       @@ plainto_tsquery('english', search_query) OR
-      -- 模糊匹配：title
+      -- title fuzzy matching
       (mb.title IS NOT NULL AND mb.title ILIKE '%' || search_query || '%') OR
-      -- 模糊匹配：description
+      -- description fuzzy matching
       (mb.description IS NOT NULL AND mb.description ILIKE '%' || search_query || '%') OR
-      -- 模糊匹配：type_of_crime
+      -- type_of_crime fuzzy matching
       (mb.type_of_crime IS NOT NULL AND mb.type_of_crime ILIKE '%' || search_query || '%') OR
-      -- 模糊匹配：country
+      -- country fuzzy matching
       (mb.country IS NOT NULL AND mb.country ILIKE '%' || search_query || '%') OR
-      -- 模糊匹配：state
+      -- state fuzzy matching
       (mb.state IS NOT NULL AND mb.state ILIKE '%' || search_query || '%') OR
-      -- 标签匹配
+      -- label matching
       (mb.label IS NOT NULL AND search_query = ANY(mb.label)) OR
-      -- status 匹配
+      -- status matching
       (b.status IS NOT NULL AND b.status ILIKE '%' || search_query || '%')
     )
     AND (status_filter IS NULL OR b.status = ANY(status_filter))
     AND (type_of_crime_filter IS NULL OR (mb.type_of_crime IS NOT NULL AND mb.type_of_crime = ANY(type_of_crime_filter)))
     AND (country_filter IS NULL OR (mb.country IS NOT NULL AND mb.country = ANY(country_filter)))
-    AND (label_filter IS NULL OR (mb.label IS NOT NULL AND mb.label && label_filter)) -- 数组交集
-    AND (accepted_token_filter IS NULL OR b.accepted_token = ANY(accepted_token_filter)) -- 按接受的代币过滤
+    AND (label_filter IS NULL OR (mb.label IS NOT NULL AND mb.label && label_filter)) -- Array intersection
+    AND (accepted_token_filter IS NULL OR b.accepted_token = ANY(accepted_token_filter)) -- Filter by accepted token
     AND (min_price IS NULL OR b.price >= min_price)
     AND (max_price IS NULL OR b.price <= max_price)
     AND (min_timestamp IS NULL OR b.create_timestamp >= min_timestamp)
     AND (max_timestamp IS NULL OR b.create_timestamp <= max_timestamp)
   ORDER BY 
-    -- 动态排序逻辑（所有值转换为 NUMERIC 以统一类型）
+    -- Dynamic sorting logic (all values converted to NUMERIC to unify types)
     CASE 
-      -- 如果有搜索查询且排序字段为 relevance，优先按相关性排序
+      -- If there is a search query and the sort field is relevance, prioritize sorting by relevance
       WHEN search_query IS NOT NULL AND sort_by = 'relevance' THEN
         CASE WHEN sort_direction = 'desc' THEN relevance::NUMERIC ELSE -relevance::NUMERIC END
-      -- 如果排序字段为 price
+      -- If the sort field is price
       WHEN sort_by = 'price' THEN
         CASE WHEN sort_direction = 'desc' THEN b.price ELSE -b.price END
-      -- 如果排序字段为 event_date（来自 metadata_boxes，转换为时间戳）
+      -- If the sort field is event_date (from metadata_boxes, converted to timestamp)
       WHEN sort_by = 'event_date' THEN
         CASE 
           WHEN sort_direction = 'desc' THEN 
@@ -163,13 +163,13 @@ BEGIN
           ELSE 
             CASE WHEN mb.event_date IS NULL THEN 9999999999 ELSE -EXTRACT(EPOCH FROM mb.event_date) END
         END
-      -- 如果排序字段为 box_id（即 id，直接使用数字排序）
+      -- If the sort field is box_id (i.e. id, directly use numeric sorting)
       WHEN sort_by = 'box_id' THEN
         CASE 
           WHEN sort_direction = 'desc' THEN b.id::NUMERIC
           ELSE -b.id::NUMERIC
         END
-      -- 默认情况：如果有搜索查询，按相关性排序；否则按事件日期排序
+      -- Default case: If there is a search query, sort by relevance; otherwise sort by event date
       ELSE
         CASE 
           WHEN search_query IS NOT NULL THEN
@@ -183,7 +183,7 @@ BEGIN
             END
         END
     END DESC,
-    -- 次要排序：确保结果稳定（当主要排序字段值相同时，统一使用 NUMERIC 类型）
+    -- Secondary sorting: Ensure result stability (when the main sort field values are the same, use NUMERIC type)
     CASE 
       WHEN sort_by = 'relevance' OR (search_query IS NOT NULL AND sort_by = 'relevance') THEN
         CASE 
