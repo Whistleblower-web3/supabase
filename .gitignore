@@ -25,3 +25,5 @@ Thumbs.db
 
 docs/
 tests/
+copy/
+error.md

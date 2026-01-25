@@ -15,10 +15,12 @@ CREATE INDEX IF NOT EXISTS idx_boxes_completer_id ON boxes(network, layer, compl
 CREATE INDEX IF NOT EXISTS idx_boxes_create_timestamp ON boxes(network, layer, create_timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_boxes_price ON boxes(network, layer, price);
 CREATE INDEX IF NOT EXISTS idx_boxes_box_info_cid ON boxes(network, layer, box_info_cid);
+CREATE INDEX IF NOT EXISTS idx_boxes_listed_mode ON boxes(network, layer, listed_mode);
 
 -- boxes composite indexes
 CREATE INDEX IF NOT EXISTS idx_boxes_status_price ON boxes(network, layer, status, price);
 CREATE INDEX IF NOT EXISTS idx_boxes_status_create_timestamp ON boxes(network, layer, status, create_timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_boxes_status_listed_mode ON boxes(network, layer, status, listed_mode);
 
 -- ============================================
 -- metadata_boxes indexes
@@ -111,7 +113,8 @@ CREATE INDEX IF NOT EXISTS idx_user_withdraw_amounts_user_withdraw_type ON user_
 -- box_bidders indexes
 -- ============================================
 CREATE INDEX IF NOT EXISTS idx_box_bidders_network_layer ON box_bidders(network, layer);
-CREATE INDEX IF NOT EXISTS idx_box_bidders_id ON box_bidders(network, layer, id); -- id 是 boxId
+CREATE INDEX IF NOT EXISTS idx_box_bidders_id ON box_bidders(network, layer, id); -- id is boxId-UserId
+CREATE INDEX IF NOT EXISTS idx_box_bidders_box_id ON box_bidders(network, layer, box_id);
 CREATE INDEX IF NOT EXISTS idx_box_bidders_bidder_id ON box_bidders(network, layer, bidder_id);
 
 -- ============================================

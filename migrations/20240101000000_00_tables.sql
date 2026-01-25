@@ -33,13 +33,12 @@ CREATE TABLE IF NOT EXISTS boxes (
   completer_id NUMERIC(78, 0), -- UserId 
   
   -- Status and timestamps
-  status TEXT NOT NULL CHECK (status IN (
-    'Storing', 'Selling', 'Auctioning', 'Paid', 
-    'Refunding', 'InSecrecy', 'Published', 'Blacklisted'
-  )),
+  -- Status values: 0=Storing, 1=Selling, 2=Auctioning, 3=Paid, 4=Refunding, 5=Delaying, 6=Published, 7=Blacklisted
+  status SMALLINT NOT NULL CHECK (status BETWEEN 0 AND 7),
   
   -- Transaction related
-  listed_mode TEXT CHECK (listed_mode IN ('Selling', 'Auctioning')), 
+  -- listed_mode values: NULL=Not Listed, 1=Selling, 2=Auctioning
+  listed_mode SMALLINT CHECK (listed_mode BETWEEN 1 AND 2), 
   accepted_token TEXT, 
   refund_permit BOOLEAN, 
   
@@ -52,6 +51,8 @@ CREATE TABLE IF NOT EXISTS boxes (
   request_refund_deadline NUMERIC(78, 0), 
   review_deadline NUMERIC(78, 0) 
 );
+
+ALTER TABLE boxes ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- 2. users table (User table - UserId)
@@ -67,6 +68,8 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
 );
 
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
 
 -- ============================================
 -- 11. box_bidders table (Box bidder association table)
@@ -77,13 +80,16 @@ CREATE TABLE IF NOT EXISTS box_bidders (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id NUMERIC(78, 0) NOT NULL, -- boxId
+  id TEXT NOT NULL, -- boxId-UserId 
+  box_id NUMERIC(78, 0) NOT NULL, -- boxId
   bidder_id NUMERIC(78, 0) NOT NULL, -- UserId
   
-  PRIMARY KEY (network, layer, id, bidder_id), -- Composite primary key contains network field
-  FOREIGN KEY (network, layer, id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
+  PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
+  FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
   FOREIGN KEY (network, layer, bidder_id) REFERENCES users(network, layer, id) ON DELETE CASCADE
 );
+
+ALTER TABLE box_bidders ENABLE ROW LEVEL SECURITY;
 
 
 -- ============================================
@@ -100,6 +106,8 @@ CREATE TABLE IF NOT EXISTS user_addresses (
   PRIMARY KEY (network, layer, id), 
   is_blacklisted BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+ALTER TABLE user_addresses ENABLE ROW LEVEL SECURITY;
 
 
 -- ============================================
@@ -140,6 +148,8 @@ CREATE TABLE IF NOT EXISTS metadata_boxes (
   public_key TEXT
 );
 
+ALTER TABLE metadata_boxes ENABLE ROW LEVEL SECURITY;
+
 
 -- ============================================
 -- 5. payments table (Payment record table)
@@ -165,6 +175,8 @@ CREATE TABLE IF NOT EXISTS payments (
   block_number NUMERIC(78, 0) NOT NULL
 );
 
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+
 -- ============================================
 -- 6. withdraws table (Withdraw record table)
 -- Events: OrderAmountWithdraw, HelperRewrdsWithdraw, MinterRewardsWithdraw
@@ -175,7 +187,7 @@ CREATE TABLE IF NOT EXISTS withdraws (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL, -- Transaction hash - log index
+  id TEXT NOT NULL, -- eventName-withdrawType-Transaction hash 
   token TEXT NOT NULL, 
   box_list NUMERIC(78, 0)[] NOT NULL, -- Box ID list
   user_id NUMERIC(78, 0) NOT NULL, -- UserId
@@ -201,7 +213,7 @@ CREATE TABLE IF NOT EXISTS rewards_addeds (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id TEXT NOT NULL, -- Transaction hash - log index (for unique identification of each event)
+  id TEXT NOT NULL, -- eventName-rewardType-Transaction hash 
   box_id NUMERIC(78, 0) NOT NULL, 
   token TEXT NOT NULL, -- Token address
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer', 'Total')), -- Note: includes 'Total'
@@ -213,6 +225,8 @@ CREATE TABLE IF NOT EXISTS rewards_addeds (
   PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE
 );
+
+ALTER TABLE rewards_addeds ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- 8. box_rewards table (Box total reward amount aggregation table)
@@ -234,6 +248,8 @@ CREATE TABLE IF NOT EXISTS box_rewards (
   UNIQUE(network, layer, box_id, reward_type, token)
 );
 
+ALTER TABLE box_rewards ENABLE ROW LEVEL SECURITY;
+
 -- ============================================
 -- 9. user_rewards table (User reward amount detail table)
 -- ============================================
@@ -254,6 +270,8 @@ CREATE TABLE IF NOT EXISTS user_rewards (
   UNIQUE(network, layer, user_id, reward_type, token)
 );
 
+ALTER TABLE user_rewards ENABLE ROW LEVEL SECURITY;
+
 -- ============================================
 -- 10. user_withdraws table (User total withdrawal amount detail table)
 -- ============================================
@@ -273,6 +291,8 @@ CREATE TABLE IF NOT EXISTS user_withdraws (
   amount NUMERIC(78, 0) NOT NULL DEFAULT 0,
   UNIQUE(network, layer, user_id, withdraw_type, token)
 );
+
+ALTER TABLE user_withdraws ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- 12. box_user_order_amounts table (Box user (buyer/bidder) each token的资金状态表)
@@ -302,6 +322,8 @@ CREATE TABLE IF NOT EXISTS box_user_order_amounts (
   UNIQUE(network, layer, user_id, box_id, token)
 );
 
+ALTER TABLE box_user_order_amounts ENABLE ROW LEVEL SECURITY;
+
 -- ============================================
 -- 13. statistical_state table (Statistical state table - singleton)
 -- Listen to boxes table, when status changes, accumulate and subtract
@@ -316,15 +338,24 @@ CREATE TABLE IF NOT EXISTS statistical_state (
   
   PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   total_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  storing_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  selling_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  auctioning_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  paid_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  refunding_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  in_secrecy_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  published_supply NUMERIC(78, 0) NOT NULL DEFAULT 0,
-  blacklisted_supply NUMERIC(78, 0) NOT NULL DEFAULT 0
+  status_0_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Storing
+  status_1_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Selling
+  status_2_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Auctioning
+  status_3_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Paid
+  status_4_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Refunding
+  status_5_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Delaying
+  status_6_supply NUMERIC(78, 0) NOT NULL DEFAULT 0, -- Published
+  status_7_supply NUMERIC(78, 0) NOT NULL DEFAULT 0  -- Blacklisted
 );
+
+ALTER TABLE statistical_state ENABLE ROW LEVEL SECURITY;
+
+-- Initialize statistical_state
+INSERT INTO statistical_state (network, layer, id)
+VALUES 
+  ('testnet', 'sapphire', 'statistical'),
+  ('mainnet', 'sapphire', 'statistical')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 14. fund_manager_state table (Fund manager state table - singleton)
@@ -340,6 +371,15 @@ CREATE TABLE IF NOT EXISTS fund_manager_state (
   
   PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
 );
+
+ALTER TABLE fund_manager_state ENABLE ROW LEVEL SECURITY;
+
+-- Initialize fund_manager_state
+INSERT INTO fund_manager_state (network, layer, id)
+VALUES 
+  ('testnet', 'sapphire', 'fundManager'),
+  ('mainnet', 'sapphire', 'fundManager')
+ON CONFLICT DO NOTHING;
 
 -- ============================================
 -- 15. token_total_amounts table (Token total amount table)
@@ -372,6 +412,8 @@ CREATE TABLE IF NOT EXISTS token_total_amounts (
   UNIQUE(network, layer, token, funds_type)
 );
 
+ALTER TABLE token_total_amounts ENABLE ROW LEVEL SECURITY;
+
 -- ============================================
 -- 16. sync_status table (Sync status table - for event sync script)
 -- ============================================
@@ -387,6 +429,8 @@ CREATE TABLE IF NOT EXISTS sync_status (
   
   PRIMARY KEY (network, layer, contract_name) -- Composite primary key contains network field and contract name
 );
+
+ALTER TABLE sync_status ENABLE ROW LEVEL SECURITY;
 
 -- Initialize sync_status records (create initial records for each network and each contract)
 INSERT INTO sync_status (network, layer, contract_name, last_synced_block, last_synced_at)

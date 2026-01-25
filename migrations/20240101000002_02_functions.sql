@@ -12,11 +12,12 @@ CREATE OR REPLACE FUNCTION search_boxes(
   network_filter TEXT DEFAULT NULL,
   layer_filter TEXT DEFAULT 'sapphire',
   search_query TEXT DEFAULT NULL,
-  status_filter TEXT[] DEFAULT NULL,
+  status_filter SMALLINT[] DEFAULT NULL,  -- Changed from TEXT[] to SMALLINT[]
   type_of_crime_filter TEXT[] DEFAULT NULL,
   country_filter TEXT[] DEFAULT NULL,
   label_filter TEXT[] DEFAULT NULL,
   accepted_token_filter TEXT[] DEFAULT NULL,  -- Filter by accepted token (supports multiple tokens)
+  listed_mode_filter SMALLINT[] DEFAULT NULL,  -- Filter by listed mode: 1=Selling, 2=Auctioning
   min_price NUMERIC DEFAULT NULL,
   max_price NUMERIC DEFAULT NULL,
   min_timestamp NUMERIC DEFAULT NULL,
@@ -34,7 +35,8 @@ RETURNS TABLE (
   country TEXT,
   state TEXT,
   label TEXT[],
-  status TEXT,
+  status SMALLINT,  -- Changed from TEXT to SMALLINT
+  listed_mode SMALLINT,  -- 1=Selling, 2=Auctioning, NULL=Not Listed
   price NUMERIC,
   nft_image TEXT,
   box_image TEXT,
@@ -73,6 +75,7 @@ BEGIN
     mb.state,
     mb.label,
     b.status,
+    b.listed_mode,
     b.price,
     mb.nft_image,
     mb.box_image,
@@ -101,9 +104,7 @@ BEGIN
           -- state fuzzy matching
           CASE WHEN mb.state ILIKE '%' || search_query || '%' THEN 1.5 ELSE 0 END +
           -- label matching
-          CASE WHEN mb.label IS NOT NULL AND search_query = ANY(mb.label) THEN 2.0 ELSE 0 END +
-          -- status fuzzy matching
-          CASE WHEN b.status ILIKE '%' || search_query || '%' THEN 1.0 ELSE 0 END
+          CASE WHEN mb.label IS NOT NULL AND search_query = ANY(mb.label) THEN 2.0 ELSE 0 END
         )::REAL
       ELSE 0::REAL
     END AS relevance
@@ -133,15 +134,14 @@ BEGIN
       -- state fuzzy matching
       (mb.state IS NOT NULL AND mb.state ILIKE '%' || search_query || '%') OR
       -- label matching
-      (mb.label IS NOT NULL AND search_query = ANY(mb.label)) OR
-      -- status matching
-      (b.status IS NOT NULL AND b.status ILIKE '%' || search_query || '%')
+      (mb.label IS NOT NULL AND search_query = ANY(mb.label))
     )
     AND (status_filter IS NULL OR b.status = ANY(status_filter))
     AND (type_of_crime_filter IS NULL OR (mb.type_of_crime IS NOT NULL AND mb.type_of_crime = ANY(type_of_crime_filter)))
     AND (country_filter IS NULL OR (mb.country IS NOT NULL AND mb.country = ANY(country_filter)))
     AND (label_filter IS NULL OR (mb.label IS NOT NULL AND mb.label && label_filter)) -- Array intersection
     AND (accepted_token_filter IS NULL OR b.accepted_token = ANY(accepted_token_filter)) -- Filter by accepted token
+    AND (listed_mode_filter IS NULL OR b.listed_mode = ANY(listed_mode_filter)) -- Filter by listed mode
     AND (min_price IS NULL OR b.price >= min_price)
     AND (max_price IS NULL OR b.price <= max_price)
     AND (min_timestamp IS NULL OR b.create_timestamp >= min_timestamp)
