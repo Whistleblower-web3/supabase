@@ -490,6 +490,8 @@ export interface Database {
                     status: number;
                     listed_mode: number | null;
                     price: string;
+                    deadline: string;
+                    buyer_id: string | null;
                     nft_image: string | null;
                     box_image: string | null;
                     event_date: string | null;

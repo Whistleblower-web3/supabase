@@ -1,29 +1,31 @@
--- Delete all old versions of the search_boxes function overloads
--- Use CASCADE to delete all overload versions, avoid function not unique error
+-- ============================================
+-- Increment Migration: Update search_boxes return fields
+-- Migration Date: 2026-01-26
+-- ============================================
+
+-- IMPORTANT: Use CASCADE to drop all existing overloads and dependent objects (if any)
+-- This ensures no "duplicate function" or "return type mismatch" errors.
 DROP FUNCTION IF EXISTS search_boxes CASCADE;
 
 -- ============================================
--- Full text search function: search_boxes
+-- Full text search function: search_boxes (Enhanced)
 -- ============================================
--- Supports full text search, precise filtering and composite queries
--- Related metadata_boxes table to get metadata information
--- Must specify network parameter to distinguish data from different networks
 CREATE OR REPLACE FUNCTION search_boxes(
   network_filter TEXT DEFAULT NULL,
   layer_filter TEXT DEFAULT 'sapphire',
   search_query TEXT DEFAULT NULL,
-  status_filter SMALLINT[] DEFAULT NULL,  -- Changed from TEXT[] to SMALLINT[]
+  status_filter SMALLINT[] DEFAULT NULL,
   type_of_crime_filter TEXT[] DEFAULT NULL,
   country_filter TEXT[] DEFAULT NULL,
   label_filter TEXT[] DEFAULT NULL,
-  accepted_token_filter TEXT[] DEFAULT NULL,  -- Filter by accepted token (supports multiple tokens)
-  listed_mode_filter SMALLINT[] DEFAULT NULL,  -- Filter by listed mode: 1=Selling, 2=Auctioning
+  accepted_token_filter TEXT[] DEFAULT NULL,
+  listed_mode_filter SMALLINT[] DEFAULT NULL,
   min_price NUMERIC DEFAULT NULL,
   max_price NUMERIC DEFAULT NULL,
   min_timestamp NUMERIC DEFAULT NULL,
   max_timestamp NUMERIC DEFAULT NULL,
-  sort_by TEXT DEFAULT 'relevance',  -- Sort by field: 'relevance' | 'price' | 'event_date' | 'box_id'
-  sort_direction TEXT DEFAULT 'desc',  -- Sort direction: 'asc' | 'desc'
+  sort_by TEXT DEFAULT 'relevance',
+  sort_direction TEXT DEFAULT 'desc',
   limit_count INTEGER DEFAULT 20,
   offset_count INTEGER DEFAULT 0
 )
@@ -35,11 +37,11 @@ RETURNS TABLE (
   country TEXT,
   state TEXT,
   label TEXT[],
-  status SMALLINT,  -- Changed from TEXT to SMALLINT
-  listed_mode SMALLINT,  -- 1=Selling, 2=Auctioning, NULL=Not Listed
+  status SMALLINT,
+  listed_mode SMALLINT,
   price NUMERIC,
-  deadline NUMERIC(78, 0),
-  buyer_id NUMERIC(78, 0),
+  deadline NUMERIC(78, 0),  -- Added
+  buyer_id NUMERIC(78, 0), -- Added
   nft_image TEXT,
   box_image TEXT,
   event_date DATE,
@@ -82,8 +84,8 @@ BEGIN
     b.status,
     b.listed_mode,
     b.price,
-    b.deadline,
-    b.buyer_id,
+    b.deadline,  -- Added
+    b.buyer_id,  -- Added
     mb.nft_image,
     mb.box_image,
     mb.event_date,
@@ -124,9 +126,9 @@ BEGIN
       -- If there is no search query, return all results
       search_query IS NULL OR
       search_query = '' OR
-      -- Exact match: boxId (supports text and number, highest priority)
+      -- Exact match: boxId
       b.id::TEXT = search_query OR
-      -- Full text search: title and description (needs to be non-empty and can successfully parse the query)
+      -- Full text search: title and description
       (mb.title IS NOT NULL OR mb.description IS NOT NULL) AND
       to_tsvector('english', COALESCE(mb.title, '') || ' ' || COALESCE(mb.description, '')) 
       @@ plainto_tsquery('english', search_query) OR
@@ -146,23 +148,19 @@ BEGIN
     AND (status_filter IS NULL OR b.status = ANY(status_filter))
     AND (type_of_crime_filter IS NULL OR (mb.type_of_crime IS NOT NULL AND mb.type_of_crime = ANY(type_of_crime_filter)))
     AND (country_filter IS NULL OR (mb.country IS NOT NULL AND mb.country = ANY(country_filter)))
-    AND (label_filter IS NULL OR (mb.label IS NOT NULL AND mb.label && label_filter)) -- Array intersection
-    AND (accepted_token_filter IS NULL OR b.accepted_token = ANY(accepted_token_filter)) -- Filter by accepted token
-    AND (listed_mode_filter IS NULL OR b.listed_mode = ANY(listed_mode_filter)) -- Filter by listed mode
+    AND (label_filter IS NULL OR (mb.label IS NOT NULL AND mb.label && label_filter)) 
+    AND (accepted_token_filter IS NULL OR b.accepted_token = ANY(accepted_token_filter))
+    AND (listed_mode_filter IS NULL OR b.listed_mode = ANY(listed_mode_filter))
     AND (min_price IS NULL OR b.price >= min_price)
     AND (max_price IS NULL OR b.price <= max_price)
     AND (min_timestamp IS NULL OR b.create_timestamp >= min_timestamp)
     AND (max_timestamp IS NULL OR b.create_timestamp <= max_timestamp)
   ORDER BY 
-    -- Dynamic sorting logic (all values converted to NUMERIC to unify types)
     CASE 
-      -- If there is a search query and the sort field is relevance, prioritize sorting by relevance
       WHEN search_query IS NOT NULL AND sort_by = 'relevance' THEN
         CASE WHEN sort_direction = 'desc' THEN relevance::NUMERIC ELSE -relevance::NUMERIC END
-      -- If the sort field is price
       WHEN sort_by = 'price' THEN
         CASE WHEN sort_direction = 'desc' THEN b.price ELSE -b.price END
-      -- If the sort field is event_date (from metadata_boxes, converted to timestamp)
       WHEN sort_by = 'event_date' THEN
         CASE 
           WHEN sort_direction = 'desc' THEN 
@@ -170,13 +168,11 @@ BEGIN
           ELSE 
             CASE WHEN mb.event_date IS NULL THEN 9999999999 ELSE -EXTRACT(EPOCH FROM mb.event_date) END
         END
-      -- If the sort field is box_id (i.e. id, directly use numeric sorting)
       WHEN sort_by = 'box_id' THEN
         CASE 
           WHEN sort_direction = 'desc' THEN b.id::NUMERIC
           ELSE -b.id::NUMERIC
         END
-      -- Default case: If there is a search query, sort by relevance; otherwise sort by event date
       ELSE
         CASE 
           WHEN search_query IS NOT NULL THEN
@@ -190,7 +186,6 @@ BEGIN
             END
         END
     END DESC,
-    -- Secondary sorting: Ensure result stability (when the main sort field values are the same, use NUMERIC type)
     CASE 
       WHEN sort_by = 'relevance' OR (search_query IS NOT NULL AND sort_by = 'relevance') THEN
         CASE 
@@ -228,4 +223,3 @@ BEGIN
   OFFSET offset_count;
 END;
 $$ LANGUAGE plpgsql;
-
