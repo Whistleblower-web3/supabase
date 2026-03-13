@@ -1,22 +1,21 @@
 
-export interface EncryptionFileCIDType {
-    fileCID_encryption: string;
-    fileCID_iv: string;
-}
 
-export interface EncryptionPasswordType {
-    password_encryption: string;
-    password_iv: string;
-}
 
-export interface EncryptionSlicesMetadataCIDType {
-    slicesMetadataCID_encryption: string;
-    slicesMetadataCID_iv: string;
+export interface EncryptionResultType {
+    encryption_data: string;
+    encryption_iv: string;
 }
 
 export interface EncryptionDataType {
-    encryptionSlicesMetadataCID: EncryptionSlicesMetadataCIDType;
-    encryptionFileCID: EncryptionFileCIDType[];
-    encryptionPasswords: EncryptionPasswordType;
-    publicKey: string,
+    encryption_slices_metadata_cid: EncryptionResultType;
+    encryption_file_cid: EncryptionResultType[];
+    encryption_passwords: EncryptionResultType;
+    public_key: string,
+    // privateKey: string,
+}
+
+// Key pair structure
+export interface KeyPairType_Mint {
+    private_key_minter: string;
+    public_key_minter: string;
 }

@@ -46,10 +46,10 @@ EXECUTE FUNCTION update_box_rewards_on_rewards_added();
 CREATE OR REPLACE FUNCTION update_user_rewards_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_minter_id NUMERIC(78, 0);
-    v_seller_id NUMERIC(78, 0);
-    v_completer_id NUMERIC(78, 0);
-    v_user_id NUMERIC(78, 0);
+    v_minter_id TEXT;
+    v_seller_id TEXT;
+    v_completer_id TEXT;
+    v_user_id TEXT;
     v_user_reward_id TEXT;
     v_amount_change NUMERIC(78, 0);
 BEGIN
@@ -121,12 +121,12 @@ RETURNS TRIGGER AS $$
 DECLARE
     v_id TEXT;
 BEGIN
-    IF NEW.withdraw_type NOT IN ('Helper', 'Minter') THEN
+    IF NEW.withdraw_type != 'Reward' THEN
         RETURN NEW;
     END IF;
 
     -- Update user_withdraws table (accumulate)
-    v_id := NEW.user_id::TEXT || '-' || NEW.withdraw_type || '-' || NEW.token;
+    v_id := NEW.user_id || '-' || NEW.withdraw_type || '-' || NEW.token;
     INSERT INTO user_withdraws (
         network, layer, id, user_id, withdraw_type, token, amount
     )
@@ -144,5 +144,5 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER trigger_update_user_withdraws_on_withdraw
 AFTER INSERT ON withdraws
 FOR EACH ROW
-WHEN (NEW.withdraw_type IN ('Helper', 'Minter'))
+WHEN (NEW.withdraw_type = 'Reward')
 EXECUTE FUNCTION update_user_withdraws_on_withdraw();

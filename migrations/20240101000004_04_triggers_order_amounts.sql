@@ -14,7 +14,7 @@ DECLARE
     v_fund_id TEXT;
 BEGIN
     -- Accumulate payment amount to box_user_order_amounts
-    v_fund_id := NEW.user_id::TEXT || '-' || NEW.box_id::TEXT || '-' || NEW.token;
+    v_fund_id := NEW.user_id || '-' || NEW.box_id::TEXT || '-' || NEW.token;
     INSERT INTO box_user_order_amounts (
         network, layer, id, user_id, box_id, token, amount
     )
@@ -44,13 +44,13 @@ CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_withdraw()
 RETURNS TRIGGER AS $$
 DECLARE
     v_box_id NUMERIC(78, 0);
-    v_user_id NUMERIC(78, 0);
+    v_user_id TEXT;
 BEGIN
     IF NEW.withdraw_type NOT IN ('Order', 'Refund') THEN
         RETURN NEW;
     END IF;
 
-    -- user_id in withdraws table is NUMERIC(78, 0), directly use
+    -- user_id in withdraws table is TEXT, directly use
     v_user_id := NEW.user_id;
 
     -- If box_list is empty, skip
@@ -88,7 +88,7 @@ EXECUTE FUNCTION update_box_user_order_amounts_on_withdraw();
 CREATE OR REPLACE FUNCTION update_box_user_order_amounts_on_rewards_added()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_buyer_id NUMERIC(78, 0);
+    v_buyer_id TEXT;
 BEGIN
     -- Only process Seller or Completer rewards (skip Minter/Total)
     IF NEW.reward_type NOT IN ('Seller', 'Completer') THEN

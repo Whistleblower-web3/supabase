@@ -39,7 +39,7 @@ RETURNS TABLE (
   listed_mode SMALLINT,  -- 1=Selling, 2=Auctioning, NULL=Not Listed
   price NUMERIC,
   deadline NUMERIC(78, 0),
-  buyer_id NUMERIC(78, 0),
+  buyer_id TEXT,
   nft_image TEXT,
   box_image TEXT,
   event_date DATE,

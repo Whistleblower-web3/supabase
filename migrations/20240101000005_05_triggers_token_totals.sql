@@ -99,8 +99,7 @@ DECLARE
 BEGIN
     v_funds_type := CASE NEW.withdraw_type
         WHEN 'Order' THEN 'OrderWithdraw'
-        WHEN 'Helper' THEN 'HelperRewardsWithdraw'
-        WHEN 'Minter' THEN 'MinterRewardsWithdraw'
+        WHEN 'Reward' THEN 'RewardsWithdraw'
         WHEN 'Refund' THEN 'RefundWithdraw'
         ELSE NULL
     END;

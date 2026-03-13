@@ -264,7 +264,7 @@ export interface Database {
                     user_id: string;
                     amount: string;
                     timestamp: string;
-                    withdraw_type: 'Order' | 'Refund' | 'Helper' | 'Minter';
+                    withdraw_type: 'Order' | 'Refund' | 'Reward';
                     transaction_hash: Uint8Array;
                     block_number: string;
                 };
@@ -277,7 +277,7 @@ export interface Database {
                     user_id: string;
                     amount: string;
                     timestamp: string;
-                    withdraw_type: 'Order' | 'Helper' | 'Minter' | 'Refund';
+                    withdraw_type: 'Order' | 'Refund' | 'Reward';
                     transaction_hash: Uint8Array;
                     block_number: string;
                 };
@@ -346,7 +346,7 @@ export interface Database {
                     layer: 'sapphire';
                     id: string;
                     user_id: string;
-                    withdraw_type: 'Helper' | 'Minter';
+                    withdraw_type: 'Reward';
                     token: string;
                     amount: string;
                 };
@@ -409,13 +409,34 @@ export interface Database {
                     network: 'testnet' | 'mainnet';
                     layer: 'sapphire';
                     id: string;
+                    paused: boolean;
                 };
                 Insert: {
                     network: 'testnet' | 'mainnet';
                     layer?: 'sapphire';
                     id?: string;
+                    paused?: boolean;
                 };
-                Update: never; // Do not allow subsequent updates
+                Update: {
+                    paused?: boolean;
+                };
+            };
+            forwarder_state: {
+                Row: {
+                    network: 'testnet' | 'mainnet';
+                    layer: 'sapphire';
+                    id: string;
+                    paused: boolean;
+                };
+                Insert: {
+                    network: 'testnet' | 'mainnet';
+                    layer?: 'sapphire';
+                    id?: string;
+                    paused?: boolean;
+                };
+                Update: {
+                    paused?: boolean;
+                };
             };
             token_total_amounts: {
                 Row: {
@@ -424,7 +445,7 @@ export interface Database {
                     id: string;
                     token: string;
                     fund_manager_id: string;
-                    funds_type: 'OrderPaid' | 'OrderWithdraw' | 'RefundWithdraw' | 'RewardsAdded' | 'HelperRewardsWithdraw' | 'MinterRewardsWithdraw';
+                    funds_type: 'OrderPaid' | 'OrderWithdraw' | 'RefundWithdraw' | 'RewardsAdded' | 'RewardsWithdraw';
                     amount: string;
                 };
                 // ⚠️ Do not allow manual insertion: This table is managed by triggers
@@ -463,11 +484,11 @@ export interface Database {
                     network_filter: 'testnet' | 'mainnet';
                     layer_filter?: 'sapphire';
                     search_query?: string | null;
-                    status_filter?: string[] | null;
+                    status_filter?: number[] | null;
                     type_of_crime_filter?: string[] | null;
                     country_filter?: string[] | null;
                     accepted_token_filter?: string[] | null;
-                    listed_mode_filter?: string[] | null;
+                    listed_mode_filter?: number[] | null;
                     label_filter?: string[] | null;
                     min_price?: number | null;
                     max_price?: number | null;

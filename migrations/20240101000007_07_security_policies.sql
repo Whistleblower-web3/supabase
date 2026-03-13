@@ -95,3 +95,8 @@ CREATE POLICY "Public read access for token_total_amounts" ON token_total_amount
 -- 16. sync_status
 -- ============================================
 CREATE POLICY "Public read access for sync_status" ON sync_status FOR SELECT USING (true);
+
+-- ============================================
+-- 17. forwarder_state
+-- ============================================
+CREATE POLICY "Public read access for forwarder_state" ON forwarder_state FOR SELECT USING (true);

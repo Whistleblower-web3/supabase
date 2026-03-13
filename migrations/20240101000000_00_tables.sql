@@ -25,12 +25,12 @@ CREATE TABLE IF NOT EXISTS boxes (
   deadline NUMERIC(78, 0) NOT NULL DEFAULT 0, 
   
   -- User relationships
-  minter_id NUMERIC(78, 0) NOT NULL, -- UserId
+  minter_id TEXT NOT NULL, -- UserId (bytes32 hex)
   owner_address TEXT NOT NULL, -- NFT owner address (wallet address)
-  publisher_id NUMERIC(78, 0), -- UserId
-  seller_id NUMERIC(78, 0), -- UserId
-  buyer_id NUMERIC(78, 0), -- UserId
-  completer_id NUMERIC(78, 0), -- UserId 
+  publisher_id TEXT, -- UserId (bytes32 hex)
+  seller_id TEXT, -- UserId (bytes32 hex)
+  buyer_id TEXT, -- UserId (bytes32 hex)
+  completer_id TEXT, -- UserId (bytes32 hex)
   
   -- Status and timestamps
   -- Status values: 0=Storing, 1=Selling, 2=Auctioning, 3=Paid, 4=Refunding, 5=Delaying, 6=Published, 7=Blacklisted
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS users (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  id NUMERIC(78, 0) NOT NULL, -- UserId 
+  id TEXT NOT NULL, -- UserId (bytes32 hex)
   
   PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
 );
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS box_bidders (
   
   id TEXT NOT NULL, -- boxId-UserId 
   box_id NUMERIC(78, 0) NOT NULL, -- boxId
-  bidder_id NUMERIC(78, 0) NOT NULL, -- UserId
+  bidder_id TEXT NOT NULL, -- UserId (bytes32 hex)
   
   PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
@@ -142,9 +142,9 @@ CREATE TABLE IF NOT EXISTS metadata_boxes (
   file_list TEXT[], 
   password TEXT, 
   
-  encryption_slices_metadata_cid JSONB, -- { slicesMetadataCID_encryption, slicesMetadataCID_iv }
-  encryption_file_cid JSONB[], -- [{ fileCID_encryption, fileCID_iv }, ...]
-  encryption_passwords JSONB, -- { password_encryption, password_iv }
+  encryption_slices_metadata_cid JSONB, -- { encryption_data, encryption_iv }
+  encryption_file_cid JSONB[], -- [{ encryption_data, encryption_iv }, ...]
+  encryption_passwords JSONB, -- { encryption_data, encryption_iv }
   public_key TEXT
 );
 
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS payments (
   
   id TEXT NOT NULL, -- Transaction hash - log index
   box_id NUMERIC(78, 0) NOT NULL,
-  user_id NUMERIC(78, 0) NOT NULL, -- UserId
+  user_id TEXT NOT NULL, -- UserId (bytes32 hex)
   
   PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, box_id) REFERENCES boxes(network, layer, id) ON DELETE CASCADE,
@@ -190,11 +190,11 @@ CREATE TABLE IF NOT EXISTS withdraws (
   id TEXT NOT NULL, -- eventName-withdrawType-Transaction hash 
   token TEXT NOT NULL, 
   box_list NUMERIC(78, 0)[] NOT NULL, -- Box ID list
-  user_id NUMERIC(78, 0) NOT NULL, -- UserId
+  user_id TEXT NOT NULL, -- UserId (bytes32 hex)
   
   PRIMARY KEY (network, layer, id), -- Composite primary key contains network field
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
-  withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Order', 'Refund', 'Helper', 'Minter')),
+  withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Order', 'Refund', 'Reward')),
   amount NUMERIC(78, 0) NOT NULL,
   timestamp NUMERIC(78, 0) NOT NULL,
   transaction_hash BYTEA NOT NULL,
@@ -261,7 +261,7 @@ CREATE TABLE IF NOT EXISTS user_rewards (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   id TEXT NOT NULL, -- user_id-reward_type-token composite key
-  user_id NUMERIC(78, 0) NOT NULL, 
+  user_id TEXT NOT NULL, 
   reward_type TEXT NOT NULL CHECK (reward_type IN ('Minter', 'Seller', 'Completer')), 
   token TEXT NOT NULL, 
   PRIMARY KEY (network, layer, id),
@@ -283,8 +283,8 @@ CREATE TABLE IF NOT EXISTS user_withdraws (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   id TEXT NOT NULL, -- user_id-withdraw_type-token composite key
-  user_id NUMERIC(78, 0) NOT NULL, 
-  withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Helper', 'Minter')), -- Withdraw type
+  user_id TEXT NOT NULL, 
+  withdraw_type TEXT NOT NULL CHECK (withdraw_type IN ('Reward')), -- Withdraw type
   token TEXT NOT NULL, 
   PRIMARY KEY (network, layer, id),
   FOREIGN KEY (network, layer, user_id) REFERENCES users(network, layer, id) ON DELETE CASCADE,
@@ -308,7 +308,7 @@ CREATE TABLE IF NOT EXISTS box_user_order_amounts (
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
   id TEXT NOT NULL, -- user_id-box_id-token composite key
-  user_id NUMERIC(78, 0) NOT NULL, -- UserId
+  user_id TEXT NOT NULL, -- UserId (bytes32 hex)
   box_id NUMERIC(78, 0) NOT NULL, -- box_id
   token TEXT NOT NULL, 
   
@@ -368,6 +368,7 @@ CREATE TABLE IF NOT EXISTS fund_manager_state (
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
   id TEXT NOT NULL DEFAULT 'fundManager', -- Singleton ID
+  paused BOOLEAN NOT NULL DEFAULT FALSE,
   
   PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
 );
@@ -403,8 +404,7 @@ CREATE TABLE IF NOT EXISTS token_total_amounts (
     'OrderWithdraw',   
     'RefundWithdraw',  
     'RewardsAdded',    
-    'HelperRewardsWithdraw',  
-    'MinterRewardsWithdraw'  
+    'RewardsWithdraw'  
   )),
   amount NUMERIC(78, 0) NOT NULL DEFAULT 0,
   
@@ -415,6 +415,29 @@ CREATE TABLE IF NOT EXISTS token_total_amounts (
 ALTER TABLE token_total_amounts ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
+-- 17. forwarder_state table (Forwarder status table - singleton)
+-- ============================================
+CREATE TABLE IF NOT EXISTS forwarder_state (
+  
+  network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
+  layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
+  
+  id TEXT NOT NULL DEFAULT 'forwarder', -- Singleton ID
+  paused BOOLEAN NOT NULL DEFAULT FALSE,
+  
+  PRIMARY KEY (network, layer, id) -- Composite primary key contains network field
+);
+
+ALTER TABLE forwarder_state ENABLE ROW LEVEL SECURITY;
+
+-- Initialize forwarder_state
+INSERT INTO forwarder_state (network, layer, id)
+VALUES 
+  ('testnet', 'sapphire', 'forwarder'),
+  ('mainnet', 'sapphire', 'forwarder')
+ON CONFLICT DO NOTHING;
+
+-- ============================================
 -- 16. sync_status table (Sync status table - for event sync script)
 -- ============================================
 -- Each contract has independent sync status
@@ -423,7 +446,7 @@ CREATE TABLE IF NOT EXISTS sync_status (
   network TEXT NOT NULL CHECK (network IN ('testnet', 'mainnet')),
   layer TEXT NOT NULL DEFAULT 'sapphire' CHECK (layer = 'sapphire'),
   
-  contract_name TEXT NOT NULL CHECK (contract_name IN ('TRUTH_BOX', 'EXCHANGE', 'FUND_MANAGER', 'TRUTH_NFT', 'USER_ID')),
+  contract_name TEXT NOT NULL CHECK (contract_name IN ('TRUTH_BOX', 'EXCHANGE', 'FUND_MANAGER', 'TRUTH_NFT', 'USER_MANAGER', 'FORWARDER')),
   last_synced_block NUMERIC(78, 0) NOT NULL DEFAULT 0,
   last_synced_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   
@@ -439,11 +462,13 @@ VALUES
   ('testnet', 'sapphire', 'EXCHANGE', 0, NOW()),
   ('testnet', 'sapphire', 'FUND_MANAGER', 0, NOW()),
   ('testnet', 'sapphire', 'TRUTH_NFT', 0, NOW()),
-  ('testnet', 'sapphire', 'USER_ID', 0, NOW()),
+  ('testnet', 'sapphire', 'USER_MANAGER', 0, NOW()),
+  ('testnet', 'sapphire', 'FORWARDER', 0, NOW()),
   ('mainnet', 'sapphire', 'TRUTH_BOX', 0, NOW()),
   ('mainnet', 'sapphire', 'EXCHANGE', 0, NOW()),
   ('mainnet', 'sapphire', 'FUND_MANAGER', 0, NOW()),
   ('mainnet', 'sapphire', 'TRUTH_NFT', 0, NOW()),
-  ('mainnet', 'sapphire', 'USER_ID', 0, NOW())
+  ('mainnet', 'sapphire', 'USER_MANAGER', 0, NOW()),
+  ('mainnet', 'sapphire', 'FORWARDER', 0, NOW())
 ON CONFLICT (network, layer, contract_name) DO NOTHING;
 

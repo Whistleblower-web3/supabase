@@ -1,28 +1,4 @@
 
-export interface CreateArgsType{
-    to_: string;
-    tokenCID_: string;
-    boxInfoCID_: string;
-    key_: string;
-    price_: number;
-}
-
-export interface CreateAndPublishArgsType{
-    to_: string;
-    tokenCID_: string;
-    boxInfoCID_: string;
-    key_: string;
-}
-
-export type FunctionNameType_TruthBox = 
-'create' |
-'createAndPublish' |
-'publishByMinter' | 
-'publishByBuyer' | 
-'payDelayFee' |
-'addBoxToBlacklist' |
-'extendDeadline';
-
 // enum Status {Storing, Selling, Auctioning, Paid, Refunding, Delaying, Published, Blacklisted}
 export const boxStatus = [
     'Storing',
@@ -36,44 +12,4 @@ export const boxStatus = [
 ] as const;
 
 export type BoxStatus = typeof boxStatus[number];
-
-// get
-export interface BoxBasicDataType {
-    price: number;
-    deadline: number;
-    status: BoxStatus;
-}
-
-//----
-
-export interface BoxUserDataType {
-    minter:string,
-    owner:string,
-    seller:string,
-    buyer:string,
-    bidders:string[],
-    completer:string,
-    // -----
-    hasBuyer: boolean,
-    hasSeller: boolean,
-    hasCompleter: boolean,
-    hasBidders: boolean,
-}
-
-
-// NftDetail_two
-export interface BoxDetailDataType {
-    refundRequestTimestamp: number,
-    purchaseTimestamp: number,
-    overDeadline:boolean,
-    isInBlacklist:boolean,
-    refundPermit: boolean,
-    inRefundDeadline: boolean,
-    inReviewDeadline: boolean,
-    
-    owner:string,
-    buyer:string,
-    noBuyer: boolean,
-    fileUri:string,
-}
 
